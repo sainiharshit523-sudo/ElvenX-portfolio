@@ -38,7 +38,7 @@ export function Footer() {
         </div>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between border-t border-border py-6 label text-xs">
-        <span>© 2026 The ElvenX Studio · <Link to="/studio-portal-2026" className="text-muted-foreground/60 hover:text-primary transition-colors">Studio Portal</Link></span>
+        <span>© 2026 The ElvenX Studio</span>
         <span className="text-muted-foreground">We create digital experiences that move.</span>
       </div>
       <XMark className="pointer-events-none absolute -bottom-[18vw] -right-[8vw] h-[45vw] w-[45vw] text-foreground/[0.03]" strokeWidth={6} />

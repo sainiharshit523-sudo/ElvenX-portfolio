@@ -14,8 +14,6 @@ import {
   saveAdminCredentials,
   createOwnerWhatsAppNotificationUrl,
   createCustomerReplyWhatsAppUrl,
-  DEFAULT_ADMIN_USERNAME,
-  DEFAULT_ADMIN_PASSWORD,
   OWNER_DISPLAY_PHONE,
   OWNER_WHATSAPP_NUMBER,
   type Lead,
@@ -116,13 +114,6 @@ function StudioPortalPage() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     sessionStorage.removeItem(PORTAL_AUTH_KEY);
-  };
-
-  const handleFillDemoCreds = () => {
-    const creds = getAdminCredentials();
-    setUsername(creds.username);
-    setPassword(creds.password);
-    setAuthError("");
   };
 
   // Password & Username change handler
@@ -299,7 +290,7 @@ function StudioPortalPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username (e.g. elvenx_admin)"
+                placeholder="Enter admin username"
                 autoFocus
                 autoComplete="username"
                 className="w-full border border-border bg-background px-4 py-3 font-mono text-base outline-none focus:border-primary transition-colors text-foreground"
@@ -310,14 +301,14 @@ function StudioPortalPage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="label text-xs" htmlFor="portal-password">
-                  Strong Password
+                  Password
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowLoginPassword(!showLoginPassword)}
                   className="text-xs font-mono text-muted-foreground hover:text-foreground"
                 >
-                  {showLoginPassword ? "Hide Password" : "Show Password"}
+                  {showLoginPassword ? "Hide" : "Show"}
                 </button>
               </div>
               <div className="relative">
@@ -326,7 +317,7 @@ function StudioPortalPage() {
                   type={showLoginPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter strong password"
+                  placeholder="Enter password"
                   autoComplete="current-password"
                   className="w-full border border-border bg-background px-4 py-3 font-mono text-base outline-none focus:border-primary transition-colors text-foreground pr-12"
                 />
@@ -347,34 +338,7 @@ function StudioPortalPage() {
             </button>
           </form>
 
-          {/* Credentials Helper Card */}
-          <div className="mt-8 border border-border/70 bg-background/60 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono text-muted-foreground font-semibold">🔐 Default Security Credentials</span>
-              <button
-                type="button"
-                onClick={handleFillDemoCreds}
-                className="text-xs font-mono text-primary underline hover:opacity-80"
-              >
-                1-Click Auto Fill
-              </button>
-            </div>
-            <div className="space-y-1 font-mono text-xs text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Username:</span>
-                <strong className="text-foreground">{DEFAULT_ADMIN_USERNAME}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Password:</span>
-                <strong className="text-foreground">{DEFAULT_ADMIN_PASSWORD}</strong>
-              </div>
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground/80 leading-normal border-t border-border/40 pt-2">
-              Tip: You can change this username and password anytime in the new <strong>⚙️ Settings</strong> panel after logging in.
-            </p>
-          </div>
-
-          <div className="mt-6 border-t border-border pt-4 text-center">
+          <div className="mt-8 border-t border-border pt-4 text-center">
             <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
               ← Return to Main Website
             </Link>
