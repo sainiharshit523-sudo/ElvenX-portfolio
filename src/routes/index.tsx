@@ -8,6 +8,7 @@ import { RevealLines, FadeUp, ScrollWords } from "@/components/site/Reveal";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { Magnetic } from "@/components/site/Magnetic";
 import { XMark } from "@/components/site/XMark";
+import { WhyElvenX } from "@/components/site/WhyElvenX";
 
 const HeroX = lazy(() => import("@/components/site/HeroX"));
 
@@ -30,6 +31,7 @@ function Home() {
       <Intro />
       <WhatWeCreate />
       <SelectedWork />
+      <WhyElvenX />
       <Pixel />
       <Playground />
       <Services />
@@ -182,7 +184,7 @@ function Pixel() {
         <div className="x-grid absolute inset-0 opacity-50" />
         <motion.div style={{ scale, rotate }} className="absolute text-primary/20"><XMark className="h-40 w-40" strokeWidth={4} /></motion.div>
         <motion.div style={{ opacity: textOpacity }} className="relative px-5 text-center">
-          <p className="label mb-6">(04) — Principle</p>
+          <p className="label mb-6">(05) — Principle</p>
           <h2 className="display text-[15vw] md:text-[10vw]">Every pixel<br />has a <span className="text-primary">purpose.</span></h2>
           <p className="mx-auto mt-8 max-w-md text-muted-foreground">Nothing decorative survives our process. Every motion, colour and line earns its place.</p>
         </motion.div>
@@ -200,7 +202,7 @@ function Playground() {
     <section className="px-5 py-32 md:px-10">
       <div className="mb-12 flex items-end justify-between">
         <h2 className="display text-[14vw] md:text-[8vw]"><RevealLines lines={["Digital", "playground"]} /></h2>
-        <span className="label">(05) — Experiments</span>
+        <span className="label">(06) — Experiments</span>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div ref={area} data-cursor="DRAG" className="relative aspect-square overflow-hidden border border-border bg-card">
@@ -248,7 +250,7 @@ function Playground() {
 function Services() {
   return (
     <section className="px-5 py-24 md:px-10">
-      <p className="label mb-12">(06) — Services</p>
+      <p className="label mb-12">(07) — Services</p>
       {services.map((s) => (
         <FadeUp key={s.n}>
           <Link to="/services" data-cursor="OPEN" className="group grid items-baseline gap-4 border-t border-border py-8 md:grid-cols-12">
@@ -267,7 +269,7 @@ function Process() {
   return (
     <section className="px-5 py-24 md:px-10">
       <div className="mb-16 grid gap-6 md:grid-cols-12">
-        <p className="label md:col-span-3">(07) — Process</p>
+        <p className="label md:col-span-3">(08) — Process</p>
         <h2 className="display text-5xl md:col-span-9 md:text-7xl">From first idea to a launch that lands.</h2>
       </div>
       <div className="grid gap-px bg-border md:grid-cols-5">
@@ -286,7 +288,7 @@ function Process() {
 function Studio() {
   return (
     <section className="grid gap-10 px-5 py-32 md:grid-cols-12 md:px-10">
-      <p className="label md:col-span-3">(08) — Studio</p>
+      <p className="label md:col-span-3">(09) — Studio</p>
       <div className="md:col-span-9">
         <h2 className="display text-[13vw] md:text-[7vw]"><RevealLines lines={["Small studio.", <span className="text-muted-foreground">Big digital thinking.</span>]} /></h2>
         <div className="mt-12 grid gap-8 md:grid-cols-3">
