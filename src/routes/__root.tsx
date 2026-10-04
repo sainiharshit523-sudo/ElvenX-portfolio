@@ -18,6 +18,7 @@ import { Nav } from "@/components/site/Nav";
 import { Footer } from "@/components/site/Footer";
 import { Cursor } from "@/components/site/Cursor";
 import { Loader } from "@/components/site/Loader";
+import { FloatingWhatsApp } from "@/components/site/FloatingWhatsApp";
 
 function NotFoundComponent() {
   return (
@@ -105,6 +106,7 @@ function RootComponent() {
       >
         <Outlet />
       </motion.main>
+      {!isAdmin && <FloatingWhatsApp />}
       {!isAdmin && <Footer />}
     </QueryClientProvider>
   );
