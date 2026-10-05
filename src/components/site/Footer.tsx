@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { XMark } from "./XMark";
 import { Magnetic } from "./Magnetic";
 import { RevealLines } from "./Reveal";
+import { OWNER_EMAIL, OWNER_WHATSAPP_NUMBER } from "@/lib/leads";
 
 export function Footer() {
   return (
@@ -14,8 +15,8 @@ export function Footer() {
       </Link>
       <div className="mt-16 flex flex-wrap items-end justify-between gap-8 pb-8">
         <Magnetic>
-          <a href="mailto:thelvenxstudio2026@gmail.com" className="font-display text-xl sm:text-2xl md:text-4xl break-all sm:break-normal underline decoration-primary underline-offset-8">
-            thelvenxstudio2026@gmail.com
+          <a href={`mailto:${OWNER_EMAIL}`} className="font-display text-xl sm:text-2xl md:text-4xl break-all sm:break-normal underline decoration-primary underline-offset-8">
+            {OWNER_EMAIL}
           </a>
         </Magnetic>
         <div className="flex gap-8 label">
@@ -28,7 +29,7 @@ export function Footer() {
             Instagram
           </a>
           <a
-            href="https://wa.me/918146587076"
+            href={`https://wa.me/${OWNER_WHATSAPP_NUMBER}`}
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-foreground"

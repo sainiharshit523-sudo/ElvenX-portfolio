@@ -3,7 +3,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { PageHeader } from "@/components/site/PageHeader";
 import { Magnetic } from "@/components/site/Magnetic";
-import { saveLead, OWNER_DISPLAY_PHONE, type Lead } from "@/lib/leads";
+import { saveLead, OWNER_DISPLAY_PHONE, OWNER_WHATSAPP_NUMBER, OWNER_EMAIL, type Lead } from "@/lib/leads";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -71,14 +71,14 @@ function ContactPage() {
         <aside className="space-y-8 md:col-span-4">
           <div>
             <p className="label">Email</p>
-            <a href="mailto:thelvenxstudio2026@gmail.com" className="font-display text-2xl hover:text-primary">
-              thelvenxstudio2026@gmail.com
+            <a href={`mailto:${OWNER_EMAIL}`} className="font-display text-2xl hover:text-primary">
+              {OWNER_EMAIL}
             </a>
           </div>
           <div>
             <p className="label">WhatsApp</p>
             <a
-              href="https://wa.me/918146587076"
+              href={`https://wa.me/${OWNER_WHATSAPP_NUMBER}`}
               target="_blank"
               rel="noopener noreferrer"
               className="font-display text-2xl hover:text-primary"
@@ -253,11 +253,11 @@ function ContactPage() {
                   data-cursor="START"
                   className="flex w-full sm:w-auto items-center justify-center gap-3 bg-primary px-6 sm:px-8 py-4 sm:py-5 font-display text-base sm:text-lg text-primary-foreground hover:opacity-90 transition-opacity"
                 >
-                  Send Inquiry &amp; Alert on WhatsApp ↗
+                  Send Project Inquiry →
                 </button>
               </Magnetic>
               <p className="mt-4 text-xs text-muted-foreground">
-                🔒 Inquiries are logged directly into our studio admin portal and instantly dispatch a WhatsApp alert with your requirements.
+                🔒 Inquiries are securely logged into our studio system and our team will review your brief within 24 hours.
               </p>
             </div>
           </form>

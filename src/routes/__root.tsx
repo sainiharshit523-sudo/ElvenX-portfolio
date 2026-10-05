@@ -59,6 +59,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "ElvenX Studio designs and builds premium websites, brand identities, UI/UX, 3D and motion experiences." },
       { name: "author", content: "The ElvenX Studio" },
       { property: "og:type", content: "website" },
+      { property: "og:title", content: "The ElvenX Studio — Digital experiences that move" },
+      { property: "og:description", content: "ElvenX Studio designs and builds premium websites, brand identities, UI/UX, 3D and motion experiences." },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#111214" },
     ],
