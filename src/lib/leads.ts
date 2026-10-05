@@ -1,3 +1,5 @@
+import { getSupabaseClient } from "./supabase";
+
 export type Lead = {
   id: string;
   name: string;
@@ -241,12 +243,120 @@ export function saveLead(input: Omit<Lead, "id" | "createdAt" | "status">): Lead
           body: JSON.stringify({ event: "new_lead", lead: newLead, timestamp: newLead.createdAt }),
         }).catch((e) => console.debug("Webhook dispatch error:", e));
       }
+
+      // 3. Centralized Cloud Sync: push lead to Supabase database if configured
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        supabase
+          .from("leads")
+          .insert({
+            id: newLead.id,
+            name: newLead.name,
+            phone: newLead.phone,
+            email: newLead.email,
+            services: newLead.services,
+            budget: newLead.budget,
+            message: newLead.message,
+            status: newLead.status,
+            notes: newLead.notes || "",
+            created_at: newLead.createdAt,
+          })
+          .then(({ error }) => {
+            if (error) console.debug("Supabase insert notice:", error.message);
+          })
+          .catch((e) => console.debug("Supabase insert error:", e));
+      }
     } catch (err) {
       console.error("Failed to save lead:", err);
     }
   }
 
   return newLead;
+}
+
+/**
+ * Asynchronous version of saveLead that awaits the Supabase database insert.
+ * Ensures mobile network requests complete before the user sees the confirmation screen.
+ */
+export async function saveLeadAsync(input: Omit<Lead, "id" | "createdAt" | "status">): Promise<Lead> {
+  const newLead = saveLead(input);
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from("leads").insert({
+        id: newLead.id,
+        name: newLead.name,
+        phone: newLead.phone,
+        email: newLead.email,
+        services: newLead.services,
+        budget: newLead.budget,
+        message: newLead.message,
+        status: newLead.status,
+        notes: newLead.notes || "",
+        created_at: newLead.createdAt,
+      });
+    } catch (err) {
+      console.debug("Supabase async save error:", err);
+    }
+  }
+  return newLead;
+}
+
+/**
+ * Fetches leads from the centralized Supabase database across all devices,
+ * merges them with local offline cache, and dispatches update events.
+ */
+export async function fetchRemoteLeads(): Promise<Lead[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return getLeads();
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.debug("Supabase remote fetch notice:", error.message);
+      return getLeads();
+    }
+
+    if (Array.isArray(data)) {
+      const mapped: Lead[] = data.map((row: Record<string, unknown>) => ({
+        id: String(row.id),
+        name: String(row.name || ""),
+        phone: String(row.phone || ""),
+        email: String(row.email || ""),
+        services: Array.isArray(row.services) ? (row.services as string[]) : [],
+        budget: String(row.budget || "Flexible"),
+        message: String(row.message || ""),
+        status: (row.status || "new") as Lead["status"],
+        notes: typeof row.notes === "string" ? row.notes : "",
+        createdAt: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+      }));
+
+      if (typeof window !== "undefined") {
+        const local = getLeads();
+        const idSet = new Set(mapped.map((l) => l.id));
+        const combined = [...mapped];
+        for (const l of local) {
+          if (!idSet.has(l.id)) {
+            combined.push(l);
+          }
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(combined));
+        window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: combined }));
+        return combined;
+      }
+      return mapped;
+    }
+  } catch (err) {
+    console.debug("Failed to fetch remote leads:", err);
+  }
+
+  return getLeads();
 }
 
 export function updateLeadStatus(id: string, status: Lead["status"]): void {
@@ -256,6 +366,11 @@ export function updateLeadStatus(id: string, status: Lead["status"]): void {
     const updated = current.map((lead) => (lead.id === id ? { ...lead, status } : lead));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: updated }));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from("leads").update({ status }).eq("id", id).catch((e) => console.debug(e));
+    }
   } catch (err) {
     console.error("Failed to update lead status:", err);
   }
@@ -268,6 +383,11 @@ export function updateLeadNotes(id: string, notes: string): void {
     const updated = current.map((lead) => (lead.id === id ? { ...lead, notes } : lead));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: updated }));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from("leads").update({ notes }).eq("id", id).catch((e) => console.debug(e));
+    }
   } catch (err) {
     console.error("Failed to update lead notes:", err);
   }
@@ -280,6 +400,11 @@ export function deleteLead(id: string): void {
     const updated = current.filter((lead) => lead.id !== id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: updated }));
+
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      supabase.from("leads").delete().eq("id", id).catch((e) => console.debug(e));
+    }
   } catch (err) {
     console.error("Failed to delete lead:", err);
   }

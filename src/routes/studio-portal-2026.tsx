@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import {
   getLeads,
+  fetchRemoteLeads,
   updateLeadStatus,
   updateLeadNotes,
   deleteLead,
@@ -19,6 +20,15 @@ import {
   OWNER_WHATSAPP_NUMBER,
   type Lead,
 } from "@/lib/leads";
+import {
+  getSupabaseConfig,
+  saveSupabaseConfig,
+  isSupabaseConfigured,
+  testSupabaseConnection,
+  getSupabaseClient,
+  SUPABASE_LEADS_SQL_SCHEMA,
+  type SupabaseConfig,
+} from "@/lib/supabase";
 
 function playNotificationChime() {
   if (typeof window === "undefined") return;
@@ -85,10 +95,19 @@ function StudioPortalPage() {
 
   // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"security" | "notifications" | "data">("security");
+  const [settingsTab, setSettingsTab] = useState<"database" | "security" | "notifications" | "data">("database");
   const [newLeadAlert, setNewLeadAlert] = useState<Lead | null>(null);
   const [notifConfig, setNotifConfig] = useState<NotificationConfig>(getNotificationConfig());
   const [browserPerm, setBrowserPerm] = useState<NotificationPermission | "unsupported">("default");
+
+  // Supabase Cloud Sync State
+  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getSupabaseConfig());
+  const [supabaseStatus, setSupabaseStatus] = useState<{ testing: boolean; message: string | null; success?: boolean }>({
+    testing: false,
+    message: null,
+  });
+  const [isCloudActive, setIsCloudActive] = useState<boolean>(isSupabaseConfigured());
+  const [copiedSql, setCopiedSql] = useState(false);
 
   // Password change form state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -109,6 +128,51 @@ function StudioPortalPage() {
         setIsAuthenticated(true);
       }
       setLeads(getLeads());
+
+      // Fetch remote leads from Supabase cloud database
+      fetchRemoteLeads().then((rem) => {
+        setLeads(rem);
+      });
+
+      // Poll cloud leads periodically every 10 seconds so mobile inquiries appear automatically
+      const cloudPollInterval = setInterval(() => {
+        fetchRemoteLeads().then((rem) => {
+          setLeads(rem);
+        });
+      }, 10000);
+
+      // Listen for Supabase Realtime broadcast events
+      const supabase = getSupabaseClient();
+      let realtimeChannel: ReturnType<NonNullable<typeof supabase>["channel"]> | null = null;
+      if (supabase) {
+        realtimeChannel = supabase
+          .channel("realtime-leads-portal")
+          .on(
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: "leads" },
+            (payload) => {
+              const row = payload.new as Record<string, unknown>;
+              if (row) {
+                const incomingLead: Lead = {
+                  id: String(row.id),
+                  name: String(row.name || "Client"),
+                  phone: String(row.phone || ""),
+                  email: String(row.email || ""),
+                  services: Array.isArray(row.services) ? (row.services as string[]) : [],
+                  budget: String(row.budget || "Flexible"),
+                  message: String(row.message || ""),
+                  status: (row.status || "new") as Lead["status"],
+                  notes: typeof row.notes === "string" ? row.notes : "",
+                  createdAt: typeof row.created_at === "string" ? row.created_at : new Date().toISOString(),
+                };
+                setNewLeadAlert(incomingLead);
+                playNotificationChime();
+                fetchRemoteLeads().then((l) => setLeads(l));
+              }
+            }
+          )
+          .subscribe();
+      }
 
       if ("Notification" in window) {
         setBrowserPerm(Notification.permission);
@@ -166,6 +230,10 @@ function StudioPortalPage() {
       window.addEventListener("elvenx_credentials_updated", handleCredsUpdated);
       window.addEventListener("elvenx_new_lead_received", handleNewLeadReceived);
       return () => {
+        clearInterval(cloudPollInterval);
+        if (supabase && realtimeChannel) {
+          supabase.removeChannel(realtimeChannel);
+        }
         window.removeEventListener("elvenx_leads_updated", handleLeadsUpdated);
         window.removeEventListener("elvenx_credentials_updated", handleCredsUpdated);
         window.removeEventListener("elvenx_new_lead_received", handleNewLeadReceived);
@@ -255,6 +323,21 @@ function StudioPortalPage() {
     setLeads([]);
     setClearConfirmationStep("initial");
     triggerNotice("All inquiries have been permanently cleared.");
+  };
+
+  // Supabase Cloud Connection & Sync Handler
+  const handleSaveSupabaseConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSupabaseStatus({ testing: true, message: "Testing connection to Supabase..." });
+    const res = await testSupabaseConnection(supabaseConfig.url, supabaseConfig.anonKey);
+    saveSupabaseConfig(supabaseConfig);
+    setIsCloudActive(isSupabaseConfigured());
+    setSupabaseStatus({ testing: false, message: res.message, success: res.success });
+    if (res.success) {
+      triggerNotice("Cloud Database connected! Syncing inquiries...");
+      const remote = await fetchRemoteLeads();
+      setLeads(remote);
+    }
   };
 
   const handleStatusChange = (id: string, status: Lead["status"]) => {
@@ -434,6 +517,24 @@ function StudioPortalPage() {
 
           {/* Action Header Buttons */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* CLOUD DATABASE SYNC STATUS BADGE */}
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsTab("database");
+                setIsSettingsOpen(true);
+              }}
+              className={`flex items-center gap-2 border px-3 py-2 label transition-all ${
+                isCloudActive
+                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                  : "border-amber-500/50 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 animate-pulse"
+              }`}
+              title="Cloud Database Sync Status"
+            >
+              <span className={`h-2 w-2 rounded-full ${isCloudActive ? "bg-emerald-400" : "bg-amber-400"}`} />
+              <span>{isCloudActive ? "☁️ Cloud Synced" : "⚠️ Local Only (Setup Cloud)"}</span>
+            </button>
+
             {/* SETTINGS BUTTON */}
             <button
               onClick={() => {
@@ -830,11 +931,22 @@ function StudioPortalPage() {
             </div>
 
             {/* Modal Navigation Tabs */}
-            <div className="flex border-b border-border bg-background/20 px-6 pt-3 gap-2">
+            <div className="flex border-b border-border bg-background/20 px-6 pt-3 gap-2 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setSettingsTab("database")}
+                className={`label border-b-2 pb-3 px-3 transition-colors shrink-0 ${
+                  settingsTab === "database"
+                    ? "border-primary text-primary font-semibold"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                ☁️ Cloud Database (Supabase)
+              </button>
               <button
                 type="button"
                 onClick={() => setSettingsTab("security")}
-                className={`label border-b-2 pb-3 px-3 transition-colors ${
+                className={`label border-b-2 pb-3 px-3 transition-colors shrink-0 ${
                   settingsTab === "security"
                     ? "border-primary text-primary font-semibold"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -845,7 +957,7 @@ function StudioPortalPage() {
               <button
                 type="button"
                 onClick={() => setSettingsTab("notifications")}
-                className={`label border-b-2 pb-3 px-3 transition-colors ${
+                className={`label border-b-2 pb-3 px-3 transition-colors shrink-0 ${
                   settingsTab === "notifications"
                     ? "border-primary text-primary font-semibold"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -856,7 +968,7 @@ function StudioPortalPage() {
               <button
                 type="button"
                 onClick={() => setSettingsTab("data")}
-                className={`label border-b-2 pb-3 px-3 transition-colors ${
+                className={`label border-b-2 pb-3 px-3 transition-colors shrink-0 ${
                   settingsTab === "data"
                     ? "border-destructive text-destructive font-semibold"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -868,6 +980,179 @@ function StudioPortalPage() {
 
             {/* Modal Body */}
             <div className="overflow-y-auto p-6 space-y-6">
+              {/* TAB 0: SUPABASE CLOUD DATABASE CONFIGURATION */}
+              {settingsTab === "database" && (
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="label text-primary font-mono block">☁️ Universal Multi-Device Sync</span>
+                      <span
+                        className={`text-[10px] font-mono px-2 py-0.5 border ${
+                          isCloudActive
+                            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+                            : "border-amber-500/50 bg-amber-500/10 text-amber-400"
+                        }`}
+                      >
+                        {isCloudActive ? "CONNECTED" : "NOT CONNECTED"}
+                      </span>
+                    </div>
+                    <h3 className="font-display text-xl text-foreground mt-1">
+                      Supabase Cloud Database &amp; Real-time Sync
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      Connect your Supabase database so inquiries submitted from any visitor's mobile phone, tablet, or browser are securely saved and appear here instantly in real time.
+                    </p>
+                  </div>
+
+                  {/* Status Banner */}
+                  <div
+                    className={`p-4 border font-mono text-xs space-y-1 ${
+                      isCloudActive
+                        ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                        : "border-amber-500/50 bg-amber-500/10 text-amber-300"
+                    }`}
+                  >
+                    <p className="font-semibold">
+                      {isCloudActive ? "✓ Cloud Database Active" : "⚠️ Local Storage Only (No Cloud Connection)"}
+                    </p>
+                    <p className="text-[11px] opacity-90 leading-relaxed">
+                      {isCloudActive
+                        ? "Universal sync is active. Inquiries sent from phones anywhere in the world will save to your Supabase leads table and push live to this dashboard."
+                        : "Currently, inquiries sent from a mobile device remain only inside that specific phone's local storage and will NOT reach this admin panel. Provide your Supabase project credentials below to enable live cloud sync."}
+                    </p>
+                  </div>
+
+                  {supabaseStatus.message && (
+                    <div
+                      className={`p-3 border font-mono text-xs ${
+                        supabaseStatus.success
+                          ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+                          : "border-destructive/50 bg-destructive/10 text-destructive"
+                      }`}
+                    >
+                      {supabaseStatus.success ? "✓" : "⚠"} {supabaseStatus.message}
+                    </div>
+                  )}
+
+                  {/* Supabase Credentials Form */}
+                  <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
+                    <div>
+                      <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="supabase-url">
+                        Supabase Project URL *
+                      </label>
+                      <input
+                        id="supabase-url"
+                        type="url"
+                        value={supabaseConfig.url}
+                        onChange={(e) => setSupabaseConfig({ ...supabaseConfig, url: e.target.value.trim() })}
+                        placeholder="https://abcdefghijklm.supabase.co"
+                        required
+                        className="w-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none focus:border-primary text-foreground"
+                      />
+                      <span className="text-[11px] text-muted-foreground mt-1 block">
+                        Found in Supabase Dashboard → Project Settings → Configuration → API → Project URL
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="supabase-anon-key">
+                        Supabase Anon / Public Key *
+                      </label>
+                      <input
+                        id="supabase-anon-key"
+                        type="password"
+                        value={supabaseConfig.anonKey}
+                        onChange={(e) => setSupabaseConfig({ ...supabaseConfig, anonKey: e.target.value.trim() })}
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        required
+                        className="w-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none focus:border-primary text-foreground"
+                      />
+                      <span className="text-[11px] text-muted-foreground mt-1 block">
+                        Found in Supabase Dashboard → Project Settings → Configuration → API → Project API Keys (anon public)
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <button
+                        type="submit"
+                        disabled={supabaseStatus.testing}
+                        className="bg-primary px-6 py-3 font-display text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+                      >
+                        {supabaseStatus.testing ? "Testing Connection..." : "Test Connection & Save Credentials →"}
+                      </button>
+
+                      {isCloudActive && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            triggerNotice("Syncing remote leads...");
+                            const fresh = await fetchRemoteLeads();
+                            setLeads(fresh);
+                            triggerNotice(`Synced ${fresh.length} leads from cloud database`);
+                          }}
+                          className="border border-border bg-card px-4 py-3 font-mono text-xs hover:border-primary text-foreground transition-colors"
+                        >
+                          🔄 Force Refresh Leads
+                        </button>
+                      )}
+                    </div>
+                  </form>
+
+                  {/* SQL Setup Instructions Box */}
+                  <div className="border border-border bg-background/50 p-5 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="label text-xs text-primary font-mono block">🛠️ Database Table Setup (One-Time)</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          In your Supabase project, go to <strong>SQL Editor</strong>, paste this script and click <strong>Run</strong>:
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof navigator !== "undefined" && navigator.clipboard) {
+                            navigator.clipboard.writeText(SUPABASE_LEADS_SQL_SCHEMA);
+                            setCopiedSql(true);
+                            triggerNotice("SQL schema copied to clipboard!");
+                            setTimeout(() => setCopiedSql(false), 3000);
+                          }
+                        }}
+                        className="border border-border bg-card px-3 py-1.5 text-xs font-mono hover:border-primary transition-colors text-foreground flex items-center gap-1.5"
+                      >
+                        <span>{copiedSql ? "✓ Copied!" : "📋 Copy SQL"}</span>
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <pre className="max-h-56 overflow-y-auto p-4 bg-black/60 border border-border text-[11px] font-mono text-muted-foreground whitespace-pre leading-relaxed select-all">
+                        {SUPABASE_LEADS_SQL_SCHEMA}
+                      </pre>
+                    </div>
+
+                    <div className="text-[11px] text-muted-foreground space-y-1">
+                      <p>✨ <strong>What this SQL does:</strong></p>
+                      <ul className="list-disc list-inside space-y-0.5 pl-1">
+                        <li>Creates the secure <code className="text-primary font-mono">public.leads</code> table.</li>
+                        <li>Configures Row Level Security (RLS) so visitors can submit inquiries safely.</li>
+                        <li>Enables Realtime broadcast so incoming mobile inquiries alert your dashboard live.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Lovable Cloud / Environment Variables Note */}
+                  <div className="border border-border/70 bg-card/40 p-4 text-xs space-y-2">
+                    <span className="label text-[11px] text-primary block">💡 Permanent Deployment Configuration</span>
+                    <p className="text-muted-foreground leading-relaxed">
+                      For permanent automatic multi-device syncing across all mobile visitors when deploying on <strong>Lovable</strong>, simply add these two Environment Variables in your project or hosting dashboard:
+                    </p>
+                    <div className="font-mono text-[11px] bg-black/50 p-2.5 border border-border space-y-1">
+                      <p><span className="text-primary">VITE_SUPABASE_URL</span>=https://your-project.supabase.co</p>
+                      <p><span className="text-primary">VITE_SUPABASE_ANON_KEY</span>=your-anon-public-key</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* TAB 1: PASSWORD & USERNAME CHANGE SECTION */}
               {settingsTab === "security" && (
                 <div className="space-y-6">

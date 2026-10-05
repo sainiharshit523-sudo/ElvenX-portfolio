@@ -3,7 +3,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { PageHeader } from "@/components/site/PageHeader";
 import { Magnetic } from "@/components/site/Magnetic";
-import { saveLead, OWNER_DISPLAY_PHONE, OWNER_WHATSAPP_NUMBER, OWNER_EMAIL, type Lead } from "@/lib/leads";
+import { saveLeadAsync, OWNER_DISPLAY_PHONE, OWNER_WHATSAPP_NUMBER, OWNER_EMAIL, type Lead } from "@/lib/leads";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -31,8 +31,9 @@ function ContactPage() {
   const [budget, setBudget] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submittedLead, setSubmittedLead] = useState<Lead | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const raw = Object.fromEntries(formData);
@@ -43,6 +44,7 @@ function ContactPage() {
     }
 
     setErrors({});
+    setIsSubmitting(true);
     const leadData = {
       name: r.data.name,
       phone: r.data.phone,
@@ -52,9 +54,13 @@ function ContactPage() {
       message: r.data.message,
     };
 
-    // 1. Save lead into Admin Portal storage (dispatches real-time portal notification)
-    const saved = saveLead(leadData);
-    setSubmittedLead(saved);
+    try {
+      // 1. Save lead into Admin Portal storage & Supabase Cloud (dispatches real-time portal notification)
+      const saved = await saveLeadAsync(leadData);
+      setSubmittedLead(saved);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const chip = (on: boolean) =>
@@ -250,10 +256,11 @@ function ContactPage() {
               <Magnetic className="w-full sm:w-auto block sm:inline-block">
                 <button
                   type="submit"
+                  disabled={isSubmitting}
                   data-cursor="START"
-                  className="flex w-full sm:w-auto items-center justify-center gap-3 bg-primary px-6 sm:px-8 py-4 sm:py-5 font-display text-base sm:text-lg text-primary-foreground hover:opacity-90 transition-opacity"
+                  className="flex w-full sm:w-auto items-center justify-center gap-3 bg-primary px-6 sm:px-8 py-4 sm:py-5 font-display text-base sm:text-lg text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
                 >
-                  Send Project Inquiry →
+                  {isSubmitting ? "Sending Inquiry..." : "Send Project Inquiry →"}
                 </button>
               </Magnetic>
               <p className="mt-4 text-xs text-muted-foreground">

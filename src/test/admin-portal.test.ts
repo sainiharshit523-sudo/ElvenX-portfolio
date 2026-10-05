@@ -5,6 +5,7 @@ import {
   clearAllLeads,
   getLeads,
   saveLead,
+  saveLeadAsync,
   deleteLead,
   resetDemoLeads,
   DEFAULT_ADMIN_USERNAME,
@@ -15,6 +16,12 @@ import {
   getNotificationConfig,
   saveNotificationConfig,
 } from "@/lib/leads";
+import {
+  getSupabaseConfig,
+  saveSupabaseConfig,
+  isSupabaseConfigured,
+  SUPABASE_LEADS_SQL_SCHEMA,
+} from "@/lib/supabase";
 
 const mockStorage: Record<string, string> = {};
 
@@ -153,6 +160,46 @@ describe("Admin Portal & Credentials Engine", () => {
     if (typeof window !== "undefined" && window.removeEventListener) {
       window.removeEventListener("elvenx_new_lead_received", testListener);
     }
+  });
+
+  it("handles asynchronous saveLeadAsync for robust mobile submissions", async () => {
+    const asyncLead = await saveLeadAsync({
+      name: "Rohan Mehra",
+      phone: "+91 98888 77777",
+      email: "rohan@mehra.com",
+      services: ["3D & Motion"],
+      budget: "$50k+",
+      message: "Mobile inquiry test for cross-device synchronization.",
+    });
+
+    expect(asyncLead).toBeDefined();
+    expect(asyncLead.id).toContain("lead_");
+    expect(asyncLead.name).toBe("Rohan Mehra");
+
+    const leads = getLeads();
+    expect(leads.some((l) => l.id === asyncLead.id)).toBe(true);
+  });
+
+  it("manages Supabase Cloud database configuration and schema validation", () => {
+    // Initial config
+    const initial = getSupabaseConfig();
+    expect(initial).toBeDefined();
+
+    // Save custom configuration
+    saveSupabaseConfig({
+      url: "https://abcdefghijklm.supabase.co",
+      anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-anon-key",
+    });
+
+    const updated = getSupabaseConfig();
+    expect(updated.url).toBe("https://abcdefghijklm.supabase.co");
+    expect(updated.anonKey).toBe("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-anon-key");
+    expect(isSupabaseConfigured()).toBe(true);
+
+    // Verify SQL schema contains essential tables and realtime publication
+    expect(SUPABASE_LEADS_SQL_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS public.leads");
+    expect(SUPABASE_LEADS_SQL_SCHEMA).toContain("ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY");
+    expect(SUPABASE_LEADS_SQL_SCHEMA).toContain("ALTER PUBLICATION supabase_realtime ADD TABLE public.leads");
   });
 });
 
