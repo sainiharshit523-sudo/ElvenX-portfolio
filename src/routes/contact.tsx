@@ -3,7 +3,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { PageHeader } from "@/components/site/PageHeader";
 import { Magnetic } from "@/components/site/Magnetic";
-import { saveLead, createOwnerWhatsAppNotificationUrl, OWNER_DISPLAY_PHONE, type Lead } from "@/lib/leads";
+import { saveLead, OWNER_DISPLAY_PHONE, type Lead } from "@/lib/leads";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -52,17 +52,9 @@ function ContactPage() {
       message: r.data.message,
     };
 
-    // 1. Save lead into Admin Portal storage
+    // 1. Save lead into Admin Portal storage (dispatches real-time portal notification)
     const saved = saveLead(leadData);
     setSubmittedLead(saved);
-
-    // 2. Open WhatsApp alert with customer details directed to owner
-    const waUrl = createOwnerWhatsAppNotificationUrl(saved);
-    try {
-      window.open(waUrl, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      console.warn("Auto-popup blocked, user can click manual dispatch button:", err);
-    }
   };
 
   const chip = (on: boolean) =>
@@ -73,7 +65,7 @@ function ContactPage() {
       <PageHeader
         label="(Contact) — Start a project"
         lines={["Let's talk."]}
-        intro="Tell us what you're building. We reply within two working days and notify our lead team instantly via WhatsApp."
+        intro="Tell us what you're building. We reply within two working days."
       />
       <section className="grid gap-16 px-5 pb-32 md:grid-cols-12 md:px-10">
         <aside className="space-y-8 md:col-span-4">
@@ -109,13 +101,13 @@ function ContactPage() {
         {submittedLead ? (
           <div className="space-y-8 md:col-span-8">
             <div>
-              <span className="label text-primary">Inquiry Saved &amp; Dispatched</span>
+              <span className="label text-primary">Inquiry Successfully Submitted</span>
               <h2 className="display mt-2 text-5xl md:text-7xl">
                 Message <span className="text-primary">received.</span>
               </h2>
               <p className="mt-4 max-w-xl text-lg text-muted-foreground">
                 Thank you, <strong className="text-foreground">{submittedLead.name}</strong>. Your project details have been
-                recorded in our studio admin records and forwarded directly to our WhatsApp hotline.
+                recorded in our studio records. Our team will review your brief and get back to you shortly.
               </p>
             </div>
 
@@ -156,22 +148,20 @@ function ContactPage() {
               )}
             </div>
 
-            <div className="flex flex-wrap gap-4 pt-2">
-              <a
-                href={createOwnerWhatsAppNotificationUrl(submittedLead)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 bg-[#25D366] px-8 py-4 font-display text-base font-semibold text-black hover:bg-[#20ba59] transition-colors"
-              >
-                <span>Direct WhatsApp Notification ↗</span>
-              </a>
+            <div className="flex flex-wrap items-center gap-4 pt-2">
               <button
                 type="button"
                 onClick={() => setSubmittedLead(null)}
-                className="border border-border px-6 py-4 label hover:border-primary transition-colors"
+                className="bg-primary px-8 py-4 font-display text-base font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
               >
                 Submit another inquiry
               </button>
+              <Link
+                to="/"
+                className="border border-border bg-card px-8 py-4 label hover:border-primary transition-colors text-foreground"
+              >
+                ← Return to Home
+              </Link>
             </div>
           </div>
         ) : (

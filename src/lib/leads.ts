@@ -146,19 +146,58 @@ const INITIAL_DEMO_LEADS: Lead[] = [
 
 export function getLeads(): Lead[] {
   if (typeof window === "undefined") {
-    return INITIAL_DEMO_LEADS;
+    return [];
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DEMO_LEADS));
-      return INITIAL_DEMO_LEADS;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : INITIAL_DEMO_LEADS;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error("Failed to load leads from storage:", err);
-    return INITIAL_DEMO_LEADS;
+    return [];
+  }
+}
+
+export type NotificationConfig = {
+  soundEnabled: boolean;
+  browserNotificationsEnabled: boolean;
+  callMeBotApiKey?: string;
+  ownerPhone?: string;
+  webhookUrl?: string;
+};
+
+const NOTIFICATION_CONFIG_KEY = "elvenx_notification_config_v1";
+
+export function getNotificationConfig(): NotificationConfig {
+  if (typeof window === "undefined") {
+    return { soundEnabled: true, browserNotificationsEnabled: true };
+  }
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_CONFIG_KEY);
+    if (!raw) return { soundEnabled: true, browserNotificationsEnabled: true };
+    const parsed = JSON.parse(raw);
+    return {
+      soundEnabled: parsed.soundEnabled ?? true,
+      browserNotificationsEnabled: parsed.browserNotificationsEnabled ?? true,
+      callMeBotApiKey: parsed.callMeBotApiKey || parsed.callmebotApiKey || "",
+      ownerPhone: parsed.ownerPhone || OWNER_WHATSAPP_NUMBER,
+      webhookUrl: parsed.webhookUrl || parsed.customWebhookUrl || "",
+    };
+  } catch {
+    return { soundEnabled: true, browserNotificationsEnabled: true };
+  }
+}
+
+export function saveNotificationConfig(cfg: NotificationConfig): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(NOTIFICATION_CONFIG_KEY, JSON.stringify(cfg));
+  } catch (err) {
+    console.error("Failed to save notification config:", err);
   }
 }
 
@@ -176,6 +215,32 @@ export function saveLead(input: Omit<Lead, "id" | "createdAt" | "status">): Lead
       const updated = [newLead, ...current];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: updated }));
+      window.dispatchEvent(new CustomEvent("elvenx_new_lead_received", { detail: newLead }));
+
+      // Automated WhatsApp notification via CallMeBot if API key is configured
+      const cfg = getNotificationConfig();
+      if (cfg.callMeBotApiKey && cfg.callMeBotApiKey.trim()) {
+        const phone = (cfg.ownerPhone || OWNER_WHATSAPP_NUMBER).replace(/[^0-9]/g, "");
+        const alertMsg = `⚡ *NEW INQUIRY — THE ELVENX STUDIO*\n\n` +
+          `👤 *Client:* ${newLead.name}\n` +
+          `📱 *Phone:* ${newLead.phone}\n` +
+          `✉️ *Email:* ${newLead.email}\n` +
+          `💰 *Budget:* ${newLead.budget}\n` +
+          `💼 *Services:* ${newLead.services.join(", ") || "General"}\n\n` +
+          `📝 *Message:*\n"${newLead.message}"`;
+
+        const callMeBotUrl = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodeURIComponent(alertMsg)}&apikey=${cfg.callMeBotApiKey.trim()}`;
+        fetch(callMeBotUrl, { mode: "no-cors" }).catch((e) => console.debug("CallMeBot dispatch error:", e));
+      }
+
+      // Automated Webhook dispatch if configured
+      if (cfg.webhookUrl && cfg.webhookUrl.trim()) {
+        fetch(cfg.webhookUrl.trim(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "new_lead", lead: newLead, timestamp: newLead.createdAt }),
+        }).catch((e) => console.debug("Webhook dispatch error:", e));
+      }
     } catch (err) {
       console.error("Failed to save lead:", err);
     }

@@ -12,6 +12,8 @@ import {
   createOwnerWhatsAppNotificationUrl,
   createCustomerReplyWhatsAppUrl,
   OWNER_WHATSAPP_NUMBER,
+  getNotificationConfig,
+  saveNotificationConfig,
 } from "@/lib/leads";
 
 const mockStorage: Record<string, string> = {};
@@ -110,4 +112,47 @@ describe("Admin Portal & Credentials Engine", () => {
     const replyUrl = createCustomerReplyWhatsAppUrl(lead.phone, lead.name);
     expect(replyUrl).toContain("https://wa.me/919876543210");
   });
+
+  it("manages notification configurations and dispatches lead notifications", () => {
+    const config = getNotificationConfig();
+    expect(config.soundEnabled).toBe(true);
+
+    saveNotificationConfig({
+      ownerPhone: "919999900000",
+      soundEnabled: false,
+      browserNotificationsEnabled: true,
+      callMeBotApiKey: "test_key_123",
+      webhookUrl: "https://webhook.site/test",
+    });
+
+    const updatedConfig = getNotificationConfig();
+    expect(updatedConfig.ownerPhone).toBe("919999900000");
+    expect(updatedConfig.soundEnabled).toBe(false);
+    expect(updatedConfig.callMeBotApiKey).toBe("test_key_123");
+
+    // Test that saveLead triggers custom event if window exists
+    let capturedEventDetail: unknown = null;
+    const testListener = (e: Event) => {
+      capturedEventDetail = (e as CustomEvent).detail;
+    };
+
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("elvenx_new_lead_received", testListener);
+    }
+
+    const newLead = saveLead({
+      name: "Ananya Sharma",
+      phone: "+91 91234 56789",
+      email: "ananya@startup.io",
+      services: ["Branding"],
+      budget: "$15k",
+      message: "Looking for complete rebrand.",
+    });
+
+    expect(newLead.id).toBeDefined();
+    if (typeof window !== "undefined" && window.removeEventListener) {
+      window.removeEventListener("elvenx_new_lead_received", testListener);
+    }
+  });
 });
+

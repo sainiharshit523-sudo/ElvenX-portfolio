@@ -6,18 +6,55 @@ import {
   updateLeadNotes,
   deleteLead,
   clearAllLeads,
-  resetDemoLeads,
   exportLeadsToCSV,
   exportLeadsToJSON,
-  saveLead,
   getAdminCredentials,
   saveAdminCredentials,
   createOwnerWhatsAppNotificationUrl,
   createCustomerReplyWhatsAppUrl,
+  getNotificationConfig,
+  saveNotificationConfig,
+  type NotificationConfig,
   OWNER_DISPLAY_PHONE,
   OWNER_WHATSAPP_NUMBER,
   type Lead,
 } from "@/lib/leads";
+
+function playNotificationChime() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const now = ctx.currentTime;
+
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.12, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.35);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(880, now + 0.12);
+    gain2.gain.setValueAtTime(0.15, now + 0.12);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.12);
+    osc2.stop(now + 0.55);
+  } catch (err) {
+    console.debug("Audio chime suppressed:", err);
+  }
+}
 
 export const Route = createFileRoute("/studio-portal-2026")({
   head: () => ({
@@ -48,7 +85,10 @@ function StudioPortalPage() {
 
   // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"security" | "data">("security");
+  const [settingsTab, setSettingsTab] = useState<"security" | "notifications" | "data">("security");
+  const [newLeadAlert, setNewLeadAlert] = useState<Lead | null>(null);
+  const [notifConfig, setNotifConfig] = useState<NotificationConfig>(getNotificationConfig());
+  const [browserPerm, setBrowserPerm] = useState<NotificationPermission | "unsupported">("default");
 
   // Password change form state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -70,6 +110,12 @@ function StudioPortalPage() {
       }
       setLeads(getLeads());
 
+      if ("Notification" in window) {
+        setBrowserPerm(Notification.permission);
+      } else {
+        setBrowserPerm("unsupported");
+      }
+
       const creds = getAdminCredentials();
       setNewUsername(creds.username);
 
@@ -81,11 +127,48 @@ function StudioPortalPage() {
         setNewUsername(updated.username);
       };
 
+      const handleNewLeadReceived = (e: Event) => {
+        const customEvt = e as CustomEvent<Lead>;
+        const incoming = customEvt.detail;
+        if (!incoming) return;
+
+        setNewLeadAlert(incoming);
+        setLeads(getLeads());
+
+        const currentCfg = getNotificationConfig();
+        if (currentCfg.soundEnabled) {
+          playNotificationChime();
+        }
+
+        if (
+          currentCfg.browserNotificationsEnabled &&
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
+          try {
+            const notif = new Notification(`⚡ New Lead: ${incoming.name}`, {
+              body: `${incoming.services.join(", ") || "Inquiry"} • ${incoming.budget}\n"${incoming.message.slice(0, 90)}..."`,
+              icon: "/favicon.ico",
+              tag: `lead-${incoming.id}`,
+            });
+            notif.onclick = () => {
+              window.focus();
+              notif.close();
+            };
+          } catch (err) {
+            console.debug("Desktop notification error:", err);
+          }
+        }
+      };
+
       window.addEventListener("elvenx_leads_updated", handleLeadsUpdated);
       window.addEventListener("elvenx_credentials_updated", handleCredsUpdated);
+      window.addEventListener("elvenx_new_lead_received", handleNewLeadReceived);
       return () => {
         window.removeEventListener("elvenx_leads_updated", handleLeadsUpdated);
         window.removeEventListener("elvenx_credentials_updated", handleCredsUpdated);
+        window.removeEventListener("elvenx_new_lead_received", handleNewLeadReceived);
       };
     }
   }, []);
@@ -174,14 +257,6 @@ function StudioPortalPage() {
     triggerNotice("All inquiries have been permanently cleared.");
   };
 
-  // Reset to demo data
-  const handleRestoreDemoData = () => {
-    resetDemoLeads();
-    setLeads(getLeads());
-    setClearConfirmationStep("initial");
-    triggerNotice("Sample inquiries restored.");
-  };
-
   const handleStatusChange = (id: string, status: Lead["status"]) => {
     updateLeadStatus(id, status);
     setLeads(getLeads());
@@ -202,19 +277,6 @@ function StudioPortalPage() {
       setLeads(getLeads());
       triggerNotice("Lead removed");
     }
-  };
-
-  const handleAddSample = () => {
-    const demo = saveLead({
-      name: `VIP Client ${Math.floor(Math.random() * 900 + 100)}`,
-      phone: "+91 98140 " + Math.floor(Math.random() * 89999 + 10000),
-      email: `client${Date.now().toString().slice(-4)}@thestudio.in`,
-      services: ["Website", "UI/UX", "3D & Motion"],
-      budget: "$25–50k",
-      message: "We need an avant-garde digital storefront and bespoke WebGL interactions for our upcoming global brand refresh.",
-    });
-    setLeads(getLeads());
-    triggerNotice(`Added sample inquiry for ${demo.name}`);
   };
 
   // Filtered leads
@@ -410,6 +472,52 @@ function StudioPortalPage() {
           </div>
         </div>
 
+        {/* Real-time New Lead Alert Banner */}
+        {newLeadAlert && (
+          <div className="mt-6 border-2 border-emerald-500 bg-emerald-500/10 p-5 shadow-2xl flex flex-wrap items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3">
+              <span className="flex h-3 w-3 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <div>
+                <p className="font-display text-base font-semibold text-foreground">
+                  ⚡ New Client Inquiry Received: <span className="text-emerald-400">{newLeadAlert.name}</span> ({newLeadAlert.budget})
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                  "{newLeadAlert.message}"
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={createOwnerWhatsAppNotificationUrl(newLeadAlert)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-[#25D366] px-4 py-2 font-display text-xs font-semibold text-black hover:bg-[#20ba59] transition-colors"
+                title="Open WhatsApp notification with this lead's details"
+              >
+                <span>📲 Forward to Owner WhatsApp</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => playNotificationChime()}
+                className="border border-border bg-card px-3 py-2 text-xs font-mono text-muted-foreground hover:text-foreground"
+                title="Play notification sound"
+              >
+                🔔 Sound
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewLeadAlert(null)}
+                className="border border-border bg-card px-3 py-2 text-xs font-mono text-muted-foreground hover:text-foreground"
+              >
+                Dismiss ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Metric Cards */}
         <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="border border-border bg-card p-5">
@@ -482,12 +590,6 @@ function StudioPortalPage() {
               Export CSV ↓
             </button>
             <button
-              onClick={handleAddSample}
-              className="border border-border bg-card px-4 py-2 label text-primary hover:bg-primary/10 transition-colors"
-            >
-              + Add Sample Lead
-            </button>
-            <button
               onClick={() => setIsSettingsOpen(true)}
               className="border border-border bg-card px-4 py-2 label hover:border-primary text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -521,24 +623,20 @@ function StudioPortalPage() {
         <div className="border border-dashed border-border p-16 text-center">
           <p className="font-display text-2xl text-muted-foreground">No customer inquiries found</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {search ? "No leads matched your search query." : "There are currently no inquiries in this view."}
+            {search
+              ? "No leads matched your search query."
+              : "New inquiries submitted through the website contact form will appear here automatically."}
           </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            {search && (
-              <button onClick={() => setSearch("")} className="border border-border px-4 py-2 label">
+          {search && (
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={() => setSearch("")}
+                className="border border-border px-4 py-2 label hover:border-primary transition-colors"
+              >
                 Clear Search Filter
               </button>
-            )}
-            <button onClick={handleAddSample} className="bg-primary px-5 py-2 label text-primary-foreground">
-              Add Sample Inquiry
-            </button>
-            <button
-              onClick={handleRestoreDemoData}
-              className="border border-border px-4 py-2 label text-muted-foreground hover:text-foreground"
-            >
-              Restore Initial Demo Data
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
@@ -746,6 +844,17 @@ function StudioPortalPage() {
               </button>
               <button
                 type="button"
+                onClick={() => setSettingsTab("notifications")}
+                className={`label border-b-2 pb-3 px-3 transition-colors ${
+                  settingsTab === "notifications"
+                    ? "border-primary text-primary font-semibold"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                🔔 Notifications &amp; WhatsApp
+              </button>
+              <button
+                type="button"
                 onClick={() => setSettingsTab("data")}
                 className={`label border-b-2 pb-3 px-3 transition-colors ${
                   settingsTab === "data"
@@ -875,7 +984,171 @@ function StudioPortalPage() {
                 </div>
               )}
 
-              {/* TAB 2: CLEAR ALL DATA & BACKUP SECTION */}
+              {/* TAB 2: ALERTS & NOTIFICATIONS CONFIG */}
+              {settingsTab === "notifications" && (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-display text-xl text-foreground">Owner Alert &amp; WhatsApp Dispatch Settings</h3>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      Configure how you receive alerts when a customer fills out the project form on the main website.
+                    </p>
+                  </div>
+
+                  {/* 1. Real-time Audio Chime */}
+                  <div className="border border-border bg-background/50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="label text-xs text-primary font-mono block">🎵 Live Audio Alert</span>
+                        <span className="text-xs text-muted-foreground">
+                          Plays a synthesized chime whenever a new inquiry pops up in this portal.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => playNotificationChime()}
+                          className="border border-border bg-card px-3 py-1.5 text-xs font-mono hover:border-primary transition-colors text-foreground"
+                        >
+                          Play Chime ♫
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = { ...notifConfig, soundEnabled: !notifConfig.soundEnabled };
+                            setNotifConfig(updated);
+                            saveNotificationConfig(updated);
+                            triggerNotice(updated.soundEnabled ? "Audio chime enabled" : "Audio chime muted");
+                          }}
+                          className={`px-3 py-1.5 text-xs font-mono border transition-colors ${
+                            notifConfig.soundEnabled
+                              ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
+                              : "border-border bg-card text-muted-foreground"
+                          }`}
+                        >
+                          {notifConfig.soundEnabled ? "ON" : "OFF"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Desktop Browser Push Notification */}
+                  <div className="border border-border bg-background/50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="label text-xs text-primary font-mono block">🖥️ Desktop Web Push Notification</span>
+                        <span className="text-xs text-muted-foreground">
+                          Alerts you on your desktop even if this tab is in the background. Status:{" "}
+                          <strong className={browserPerm === "granted" ? "text-emerald-400" : "text-amber-400"}>
+                            {browserPerm.toUpperCase()}
+                          </strong>
+                        </span>
+                      </div>
+                      {browserPerm !== "granted" ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (typeof window !== "undefined" && "Notification" in window) {
+                              const res = await Notification.requestPermission();
+                              setBrowserPerm(res);
+                              if (res === "granted") {
+                                triggerNotice("Desktop notifications granted!");
+                                new Notification("The ElvenX Studio", {
+                                  body: "Desktop notifications are now active for new client leads!",
+                                  icon: "/favicon.ico",
+                                });
+                              }
+                            }
+                          }}
+                          className="bg-primary px-3 py-1.5 text-xs font-display font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                        >
+                          Enable Notifications
+                        </button>
+                      ) : (
+                        <span className="border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 text-xs font-mono text-emerald-400">
+                          ✓ Active
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Automated WhatsApp Delivery to Owner */}
+                  <div className="border border-border bg-background/50 p-4 space-y-4">
+                    <div>
+                      <span className="label text-xs text-emerald-400 font-mono block">📱 Automated WhatsApp Alerts to Owner</span>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        Receive instant WhatsApp messages on your personal number whenever a client submits on the website.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="owner-wa-phone">
+                          Owner WhatsApp Phone Number
+                        </label>
+                        <input
+                          id="owner-wa-phone"
+                          type="text"
+                          value={notifConfig.ownerPhone || OWNER_WHATSAPP_NUMBER}
+                          onChange={(e) => setNotifConfig({ ...notifConfig, ownerPhone: e.target.value })}
+                          placeholder="e.g. 918146587076"
+                          className="w-full border border-border bg-background px-4 py-2 text-xs font-mono outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="callmebot-key">
+                          CallMeBot WhatsApp API Key (Free)
+                        </label>
+                        <input
+                          id="callmebot-key"
+                          type="text"
+                          value={notifConfig.callMeBotApiKey || ""}
+                          onChange={(e) => setNotifConfig({ ...notifConfig, callMeBotApiKey: e.target.value })}
+                          placeholder="Enter your CallMeBot API key"
+                          className="w-full border border-border bg-background px-4 py-2 text-xs font-mono outline-none focus:border-primary text-foreground"
+                        />
+                        <div className="mt-2 text-[11px] text-muted-foreground bg-card p-3 border border-border space-y-1">
+                          <p className="font-semibold text-foreground">💡 How to get your free WhatsApp API key in 30 seconds:</p>
+                          <ol className="list-decimal list-inside space-y-0.5">
+                            <li>Add CallMeBot to WhatsApp: <strong className="text-primary">+34 644 44 20 89</strong></li>
+                            <li>Send this exact WhatsApp message: <code className="bg-background px-1 py-0.5 text-primary">I allow callmebot to send me messages</code></li>
+                            <li>CallMeBot will reply with your personal API Key. Paste it above and click Save.</li>
+                          </ol>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="webhook-url">
+                          Custom Webhook URL (Optional — Make / Zapier / Discord / Slack)
+                        </label>
+                        <input
+                          id="webhook-url"
+                          type="url"
+                          value={notifConfig.webhookUrl || ""}
+                          onChange={(e) => setNotifConfig({ ...notifConfig, webhookUrl: e.target.value })}
+                          placeholder="https://hooks.zapier.com/hooks/catch/..."
+                          className="w-full border border-border bg-background px-4 py-2 text-xs font-mono outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            saveNotificationConfig(notifConfig);
+                            triggerNotice("Notification settings saved successfully!");
+                          }}
+                          className="bg-primary px-6 py-2.5 font-display text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                        >
+                          Save Notification Settings →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: CLEAR ALL DATA & BACKUP SECTION */}
               {settingsTab === "data" && (
                 <div className="space-y-6">
                   <div>
@@ -953,20 +1226,6 @@ function StudioPortalPage() {
                     </div>
                   </div>
 
-                  {/* Restore sample demo inquiries */}
-                  <div className="border border-border bg-card p-4 flex items-center justify-between">
-                    <div>
-                      <span className="label text-xs text-muted-foreground block">Restore Sample Data</span>
-                      <span className="text-xs text-muted-foreground">Load standard template client inquiries for previewing.</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRestoreDemoData}
-                      className="border border-border bg-background px-4 py-2 text-xs font-mono hover:border-primary transition-colors text-foreground"
-                    >
-                      ↺ Restore Demo Leads
-                    </button>
-                  </div>
                 </div>
               )}
             </div>

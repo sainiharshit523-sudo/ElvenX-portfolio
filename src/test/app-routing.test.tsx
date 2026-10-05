@@ -21,10 +21,10 @@ describe("App routing", () => {
     expect(matches.at(-1)?.routeId).toBe("/contact");
   });
 
-  it("matches a page for /admin", () => {
+  it("does not expose /admin on the public customer site (falls back to 404)", () => {
     const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
     const matches = router.matchRoutes("/admin");
-    expect(matches.at(-1)?.routeId).toBe("/admin");
+    expect(matches.at(-1)?.routeId).toBe(rootRouteId);
   });
 
   it("matches a page for /studio-portal-2026", () => {

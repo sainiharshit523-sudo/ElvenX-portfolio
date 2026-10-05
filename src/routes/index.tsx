@@ -174,20 +174,26 @@ function SelectedWork() {
 
 function Pixel() {
   const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
-  const scale = useTransform(scrollYProgress, [0, 1], [0.4, 18]);
-  const rotate = useTransform(scrollYProgress, [0, 1], [0, 90]);
-  const textOpacity = useTransform(scrollYProgress, [0, 0.4, 0.7], [1, 1, 0]);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
+  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.8, 1.4, 2.2]);
+  const rotate = useTransform(scrollYProgress, [0, 1], [-15, 35]);
   return (
-    <section ref={ref} className="relative h-[250vh]">
-      <div className="sticky top-0 flex h-screen items-center justify-center overflow-hidden">
-        <div className="x-grid absolute inset-0 opacity-50" />
-        <motion.div style={{ scale, rotate }} className="absolute text-primary/20"><XMark className="h-40 w-40" strokeWidth={4} /></motion.div>
-        <motion.div style={{ opacity: textOpacity }} className="relative px-5 text-center">
-          <p className="label mb-6">(05) — Principle</p>
-          <h2 className="display text-[15vw] md:text-[10vw]">Every pixel<br />has a <span className="text-primary">purpose.</span></h2>
-          <p className="mx-auto mt-8 max-w-md text-muted-foreground">Nothing decorative survives our process. Every motion, colour and line earns its place.</p>
-        </motion.div>
+    <section ref={ref} className="relative overflow-hidden border-t border-border px-5 py-24 md:px-10 md:py-32">
+      <div className="x-grid absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_80%)]" />
+      <motion.div
+        style={{ scale, rotate }}
+        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-primary/15"
+      >
+        <XMark className="h-64 w-64 md:h-96 md:w-96" strokeWidth={3} />
+      </motion.div>
+      <div className="relative mx-auto max-w-4xl text-center">
+        <p className="label mb-6 text-primary">(05) — Principle</p>
+        <h2 className="display text-5xl sm:text-6xl md:text-8xl lg:text-9xl leading-[1.05]">
+          Every pixel<br />has a <span className="text-primary">purpose.</span>
+        </h2>
+        <p className="mx-auto mt-8 max-w-lg text-base sm:text-lg text-muted-foreground leading-relaxed">
+          Nothing decorative survives our process. Every motion, colour and line earns its place.
+        </p>
       </div>
     </section>
   );
@@ -199,7 +205,7 @@ function Playground() {
   const [weight, setWeight] = useState(500);
   const [pos, setPos] = useState({ x: 50, y: 50 });
   return (
-    <section className="px-5 py-32 md:px-10">
+    <section className="border-t border-border px-5 py-20 md:px-10 md:py-24">
       <div className="mb-12 flex items-end justify-between">
         <h2 className="display text-[14vw] md:text-[8vw]"><RevealLines lines={["Digital", "playground"]} /></h2>
         <span className="label">(06) — Experiments</span>
