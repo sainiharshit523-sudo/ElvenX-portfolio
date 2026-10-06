@@ -535,6 +535,26 @@ function StudioPortalPage() {
               <span>{isCloudActive ? "☁️ Cloud Synced" : "⚠️ Local Only (Setup Cloud)"}</span>
             </button>
 
+            {/* MANUAL CLOUD SYNC BUTTON */}
+            <button
+              type="button"
+              onClick={async () => {
+                triggerNotice("Connecting to Supabase...");
+                try {
+                  const refreshed = await fetchRemoteLeads();
+                  setLeads(refreshed);
+                  setIsCloudActive(isSupabaseConfigured());
+                  triggerNotice(`✓ Synced ${refreshed.length} lead${refreshed.length === 1 ? "" : "s"} from Supabase Cloud`);
+                } catch {
+                  triggerNotice("Failed to sync leads from cloud");
+                }
+              }}
+              className="flex items-center gap-2 border border-border bg-card/60 px-3 py-2 label text-foreground hover:border-primary transition-colors"
+              title="Manually fetch latest leads from Supabase Cloud"
+            >
+              <span>↻ Sync Leads</span>
+            </button>
+
             {/* SETTINGS BUTTON */}
             <button
               onClick={() => {

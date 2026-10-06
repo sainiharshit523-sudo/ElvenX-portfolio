@@ -7,9 +7,13 @@ export type SupabaseConfig = {
 
 const CONFIG_KEY = "elvenx_supabase_config_v1";
 
+export const DEFAULT_SUPABASE_URL = "https://gcvawwogtbigqwcevqou.supabase.co";
+export const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjdmF3d29ndGJpZ3F3Y2V2cW91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMTcwNjIsImV4cCI6MjEwNjc5MzA2Mn0.HrXZVdZJklztuSkR8gxMLqt0tmopU3eSgSNoMkwI7MY";
+
 export function getSupabaseConfig(): SupabaseConfig {
-  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string) || "";
-  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || "";
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string) || DEFAULT_SUPABASE_URL;
+  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || DEFAULT_SUPABASE_ANON_KEY;
 
   if (typeof window === "undefined") {
     return { url: envUrl, anonKey: envKey };
@@ -19,9 +23,11 @@ export function getSupabaseConfig(): SupabaseConfig {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<SupabaseConfig>;
+      const resolvedUrl = (parsed.url && parsed.url.trim()) ? parsed.url.trim() : envUrl.trim();
+      const resolvedKey = (parsed.anonKey && parsed.anonKey.trim()) ? parsed.anonKey.trim() : envKey.trim();
       return {
-        url: (parsed.url || envUrl).trim(),
-        anonKey: (parsed.anonKey || envKey).trim(),
+        url: resolvedUrl,
+        anonKey: resolvedKey,
       };
     }
   } catch (err) {

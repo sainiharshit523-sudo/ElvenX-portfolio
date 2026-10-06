@@ -249,7 +249,7 @@ export function saveLead(input: Omit<Lead, "id" | "createdAt" | "status">): Lead
       if (supabase) {
         supabase
           .from("leads")
-          .insert({
+          .upsert({
             id: newLead.id,
             name: newLead.name,
             phone: newLead.phone,
@@ -262,9 +262,9 @@ export function saveLead(input: Omit<Lead, "id" | "createdAt" | "status">): Lead
             created_at: newLead.createdAt,
           })
           .then(({ error }) => {
-            if (error) console.debug("Supabase insert notice:", error.message);
+            if (error) console.debug("Supabase upsert notice:", error.message);
           })
-          .catch((e) => console.debug("Supabase insert error:", e));
+          .catch((e) => console.debug("Supabase upsert error:", e));
       }
     } catch (err) {
       console.error("Failed to save lead:", err);
@@ -283,7 +283,7 @@ export async function saveLeadAsync(input: Omit<Lead, "id" | "createdAt" | "stat
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      await supabase.from("leads").insert({
+      const { error } = await supabase.from("leads").upsert({
         id: newLead.id,
         name: newLead.name,
         phone: newLead.phone,
@@ -295,8 +295,11 @@ export async function saveLeadAsync(input: Omit<Lead, "id" | "createdAt" | "stat
         notes: newLead.notes || "",
         created_at: newLead.createdAt,
       });
+      if (error) {
+        console.error("Supabase async upsert error:", error.message);
+      }
     } catch (err) {
-      console.debug("Supabase async save error:", err);
+      console.error("Supabase async save error:", err);
     }
   }
   return newLead;
