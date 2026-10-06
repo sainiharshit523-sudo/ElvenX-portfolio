@@ -11,30 +11,52 @@ export const DEFAULT_SUPABASE_URL = "https://gcvawwogtbigqwcevqou.supabase.co";
 export const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjdmF3d29ndGJpZ3F3Y2V2cW91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMTcwNjIsImV4cCI6MjEwNjc5MzA2Mn0.HrXZVdZJklztuSkR8gxMLqt0tmopU3eSgSNoMkwI7MY";
 
+export function isValidSupabaseUrl(url?: string): boolean {
+  if (!url) return false;
+  const clean = url.trim();
+  return (
+    clean.startsWith("https://") &&
+    clean.includes(".supabase.co") &&
+    !clean.includes("your-project") &&
+    !clean.includes("dashboard")
+  );
+}
+
+export function isValidSupabaseAnonKey(key?: string): boolean {
+  if (!key) return false;
+  const clean = key.trim();
+  return (
+    clean.length > 30 &&
+    !clean.includes("your-anon") &&
+    !clean.includes("your-supabase")
+  );
+}
+
 export function getSupabaseConfig(): SupabaseConfig {
-  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string) || DEFAULT_SUPABASE_URL;
-  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || DEFAULT_SUPABASE_ANON_KEY;
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string) || "";
+  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || "";
+
+  let activeUrl = isValidSupabaseUrl(envUrl) ? envUrl.trim() : DEFAULT_SUPABASE_URL;
+  let activeKey = isValidSupabaseAnonKey(envKey) ? envKey.trim() : DEFAULT_SUPABASE_ANON_KEY;
 
   if (typeof window === "undefined") {
-    return { url: envUrl, anonKey: envKey };
+    return { url: activeUrl, anonKey: activeKey };
   }
 
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<SupabaseConfig>;
-      const resolvedUrl = (parsed.url && parsed.url.trim()) ? parsed.url.trim() : envUrl.trim();
-      const resolvedKey = (parsed.anonKey && parsed.anonKey.trim()) ? parsed.anonKey.trim() : envKey.trim();
-      return {
-        url: resolvedUrl,
-        anonKey: resolvedKey,
-      };
+      if (isValidSupabaseUrl(parsed.url) && isValidSupabaseAnonKey(parsed.anonKey)) {
+        activeUrl = parsed.url!.trim();
+        activeKey = parsed.anonKey!.trim();
+      }
     }
   } catch (err) {
     console.debug("Failed to read Supabase config from storage:", err);
   }
 
-  return { url: envUrl.trim(), anonKey: envKey.trim() };
+  return { url: activeUrl, anonKey: activeKey };
 }
 
 export function saveSupabaseConfig(cfg: SupabaseConfig): void {
@@ -77,7 +99,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
 export function isSupabaseConfigured(): boolean {
   const { url, anonKey } = getSupabaseConfig();
-  return Boolean(url && anonKey && url.startsWith("https://"));
+  return isValidSupabaseUrl(url) && isValidSupabaseAnonKey(anonKey);
 }
 
 export async function testSupabaseConnection(url: string, anonKey: string): Promise<{ success: boolean; message: string }> {

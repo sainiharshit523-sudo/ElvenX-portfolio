@@ -6,7 +6,9 @@ import {
   updateLeadStatus,
   updateLeadNotes,
   deleteLead,
+  deleteLeadAsync,
   clearAllLeads,
+  clearAllLeadsAsync,
   exportLeadsToCSV,
   exportLeadsToJSON,
   getAdminCredentials,
@@ -313,13 +315,14 @@ function StudioPortalPage() {
   };
 
   // Clear data handler
-  const handleClearAllData = () => {
+  const handleClearAllData = async () => {
     if (clearConfirmationStep === "initial") {
       setClearConfirmationStep("confirming");
       return;
     }
 
-    clearAllLeads();
+    triggerNotice("Clearing all inquiries from cloud database...");
+    await clearAllLeadsAsync();
     setLeads([]);
     setClearConfirmationStep("initial");
     triggerNotice("All inquiries have been permanently cleared.");
@@ -340,25 +343,27 @@ function StudioPortalPage() {
     }
   };
 
-  const handleStatusChange = (id: string, status: Lead["status"]) => {
-    updateLeadStatus(id, status);
-    setLeads(getLeads());
+  const handleStatusChange = async (id: string, status: Lead["status"]) => {
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
     triggerNotice(`Lead status updated to "${status}"`);
+    await updateLeadStatus(id, status);
   };
 
-  const handleNotesSave = (id: string) => {
+  const handleNotesSave = async (id: string) => {
     if (editingNotes[id] !== undefined) {
-      updateLeadNotes(id, editingNotes[id]!);
-      setLeads(getLeads());
+      const noteVal = editingNotes[id]!;
+      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, notes: noteVal } : l)));
       triggerNotice("Notes saved");
+      await updateLeadNotes(id, noteVal);
     }
   };
 
-  const handleDeleteLead = (id: string, name: string) => {
+  const handleDeleteLead = async (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete inquiry from ${name}?`)) {
-      deleteLead(id);
-      setLeads(getLeads());
-      triggerNotice("Lead removed");
+      setLeads((prev) => prev.filter((l) => l.id !== id));
+      triggerNotice("Deleting inquiry from database...");
+      await deleteLeadAsync(id);
+      triggerNotice("Lead permanently removed");
     }
   };
 

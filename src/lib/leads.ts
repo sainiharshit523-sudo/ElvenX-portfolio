@@ -98,14 +98,24 @@ export function saveAdminCredentials(username: string, password: string): { succ
   return { success: true, message: "Credentials updated." };
 }
 
-export function clearAllLeads(): void {
-  if (typeof window === "undefined") return;
-  try {
+export async function clearAllLeadsAsync(): Promise<void> {
+  if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
     window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: [] }));
-  } catch (err) {
-    console.error("Failed to clear all leads:", err);
   }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from("leads").delete().neq("id", "");
+    } catch (err) {
+      console.error("Failed to clear leads from Supabase:", err);
+    }
+  }
+}
+
+export function clearAllLeads(): void {
+  void clearAllLeadsAsync();
 }
 
 export function exportLeadsToJSON(leads: Lead[]): void {
@@ -341,17 +351,10 @@ export async function fetchRemoteLeads(): Promise<Lead[]> {
       }));
 
       if (typeof window !== "undefined") {
-        const local = getLeads();
-        const idSet = new Set(mapped.map((l) => l.id));
-        const combined = [...mapped];
-        for (const l of local) {
-          if (!idSet.has(l.id)) {
-            combined.push(l);
-          }
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(combined));
-        window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: combined }));
-        return combined;
+        // Supabase is the single source of truth for leads across all devices.
+        // Sync local storage to match mapped records so deleted leads never resurrect.
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+        window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: mapped }));
       }
       return mapped;
     }
@@ -362,55 +365,62 @@ export async function fetchRemoteLeads(): Promise<Lead[]> {
   return getLeads();
 }
 
-export function updateLeadStatus(id: string, status: Lead["status"]): void {
-  if (typeof window === "undefined") return;
-  try {
+export async function updateLeadStatus(id: string, status: Lead["status"]): Promise<void> {
+  if (typeof window !== "undefined") {
     const current = getLeads();
     const updated = current.map((lead) => (lead.id === id ? { ...lead, status } : lead));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: updated }));
+  }
 
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      supabase.from("leads").update({ status }).eq("id", id).catch((e) => console.debug(e));
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from("leads").update({ status }).eq("id", id);
+    } catch (err) {
+      console.error("Failed to update lead status in Supabase:", err);
     }
-  } catch (err) {
-    console.error("Failed to update lead status:", err);
   }
 }
 
-export function updateLeadNotes(id: string, notes: string): void {
-  if (typeof window === "undefined") return;
-  try {
+export async function updateLeadNotes(id: string, notes: string): Promise<void> {
+  if (typeof window !== "undefined") {
     const current = getLeads();
     const updated = current.map((lead) => (lead.id === id ? { ...lead, notes } : lead));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: updated }));
+  }
 
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      supabase.from("leads").update({ notes }).eq("id", id).catch((e) => console.debug(e));
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from("leads").update({ notes }).eq("id", id);
+    } catch (err) {
+      console.error("Failed to update lead notes in Supabase:", err);
     }
-  } catch (err) {
-    console.error("Failed to update lead notes:", err);
   }
 }
 
-export function deleteLead(id: string): void {
-  if (typeof window === "undefined") return;
-  try {
+export async function deleteLeadAsync(id: string): Promise<void> {
+  if (typeof window !== "undefined") {
     const current = getLeads();
     const updated = current.filter((lead) => lead.id !== id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent("elvenx_leads_updated", { detail: updated }));
-
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      supabase.from("leads").delete().eq("id", id).catch((e) => console.debug(e));
-    }
-  } catch (err) {
-    console.error("Failed to delete lead:", err);
   }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from("leads").delete().eq("id", id);
+    } catch (err) {
+      console.error("Failed to delete lead from Supabase:", err);
+    }
+  }
+}
+
+export function deleteLead(id: string): void {
+  void deleteLeadAsync(id);
 }
 
 export function resetDemoLeads(): void {
