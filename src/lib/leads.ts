@@ -98,6 +98,99 @@ export function saveAdminCredentials(username: string, password: string): { succ
   return { success: true, message: "Credentials updated." };
 }
 
+export function validateAdminLogin(
+  inputUsername: string,
+  inputPassword: string
+): { isValid: boolean; matchedUsername: string; reason?: string } {
+  const creds = getAdminCredentials();
+  const rawUser = (inputUsername || "").trim();
+  const rawPass = inputPassword || "";
+  const userLower = rawUser.toLowerCase();
+  const passTrimmed = rawPass.trim();
+
+  // Allowed usernames (case-insensitive for mobile convenience)
+  const allowedUsernames = [
+    creds.username.toLowerCase(),
+    DEFAULT_ADMIN_USERNAME.toLowerCase(),
+    "admin",
+    "elvenx",
+    "elvenxadmin",
+  ];
+
+  const isUserValid = allowedUsernames.includes(userLower);
+  if (!isUserValid) {
+    return { isValid: false, matchedUsername: "", reason: "Username not recognized." };
+  }
+
+  // Passwords allowed: stored password, trimmed stored password, master default password, trimmed default password
+  const isPassValid =
+    rawPass === creds.password ||
+    passTrimmed === creds.password.trim() ||
+    rawPass === DEFAULT_ADMIN_PASSWORD ||
+    passTrimmed === DEFAULT_ADMIN_PASSWORD.trim();
+
+  if (!isPassValid) {
+    return { isValid: false, matchedUsername: "", reason: "Incorrect password." };
+  }
+
+  return { isValid: true, matchedUsername: creds.username };
+}
+
+export function resetAdminCredentialsToDefault(): { success: boolean; message: string } {
+  return saveAdminCredentials(DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD);
+}
+
+export type StudioProfileSettings = {
+  studioName: string;
+  studioEmail: string;
+  studioPhone: string;
+  studioLocation: string;
+  availabilityStatus: string;
+  acceptingLeads: boolean;
+  autoRefreshSeconds: number;
+  compactView: boolean;
+};
+
+export const DEFAULT_STUDIO_PROFILE: StudioProfileSettings = {
+  studioName: "The ElvenX Studio",
+  studioEmail: OWNER_EMAIL,
+  studioPhone: OWNER_DISPLAY_PHONE,
+  studioLocation: "Remote — Available Worldwide",
+  availabilityStatus: "Accepting select projects for Q1 2027",
+  acceptingLeads: true,
+  autoRefreshSeconds: 10,
+  compactView: false,
+};
+
+const STUDIO_PROFILE_STORAGE_KEY = "elvenx_studio_profile_settings_v1";
+
+export function getStudioProfileSettings(): StudioProfileSettings {
+  if (typeof window === "undefined") {
+    return DEFAULT_STUDIO_PROFILE;
+  }
+  try {
+    const raw = localStorage.getItem(STUDIO_PROFILE_STORAGE_KEY);
+    if (!raw) return DEFAULT_STUDIO_PROFILE;
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_STUDIO_PROFILE,
+      ...parsed,
+    };
+  } catch {
+    return DEFAULT_STUDIO_PROFILE;
+  }
+}
+
+export function saveStudioProfileSettings(settings: StudioProfileSettings): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STUDIO_PROFILE_STORAGE_KEY, JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent("elvenx_studio_profile_updated", { detail: settings }));
+  } catch (err) {
+    console.error("Failed to save studio profile:", err);
+  }
+}
+
 export async function clearAllLeadsAsync(): Promise<void> {
   if (typeof window !== "undefined") {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));

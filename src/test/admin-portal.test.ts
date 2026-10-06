@@ -15,6 +15,10 @@ import {
   OWNER_WHATSAPP_NUMBER,
   getNotificationConfig,
   saveNotificationConfig,
+  validateAdminLogin,
+  resetAdminCredentialsToDefault,
+  getStudioProfileSettings,
+  saveStudioProfileSettings,
 } from "@/lib/leads";
 import {
   getSupabaseConfig,
@@ -200,6 +204,70 @@ describe("Admin Portal & Credentials Engine", () => {
     expect(SUPABASE_LEADS_SQL_SCHEMA).toContain("CREATE TABLE IF NOT EXISTS public.leads");
     expect(SUPABASE_LEADS_SQL_SCHEMA).toContain("ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY");
     expect(SUPABASE_LEADS_SQL_SCHEMA).toContain("ALTER PUBLICATION supabase_realtime ADD TABLE public.leads");
+  });
+
+  it("validates mobile login with case-insensitivity, whitespace trimming, and aliases", () => {
+    // 1. Exact default credentials
+    const exact = validateAdminLogin("elvenx_admin", "ElvenX#Studio@2026!");
+    expect(exact.isValid).toBe(true);
+
+    // 2. Mobile automatic capitalization (e.g. iOS/Android first letter capitalized)
+    const mobileCap = validateAdminLogin("Elvenx_admin", "ElvenX#Studio@2026!");
+    expect(mobileCap.isValid).toBe(true);
+
+    // 3. Mobile virtual keyboard trailing space in username & password
+    const mobileSpaces = validateAdminLogin(" elvenx_admin ", " ElvenX#Studio@2026! ");
+    expect(mobileSpaces.isValid).toBe(true);
+
+    // 4. Quick admin aliases for phone convenience
+    const aliasAdmin = validateAdminLogin("admin", "ElvenX#Studio@2026!");
+    expect(aliasAdmin.isValid).toBe(true);
+
+    const aliasElvenx = validateAdminLogin("elvenx", "ElvenX#Studio@2026!");
+    expect(aliasElvenx.isValid).toBe(true);
+
+    // 5. Wrong password rejected
+    const wrongPass = validateAdminLogin("elvenx_admin", "WrongPassword123!");
+    expect(wrongPass.isValid).toBe(false);
+
+    // 6. Unknown user rejected
+    const unknownUser = validateAdminLogin("unknown_hacker", "ElvenX#Studio@2026!");
+    expect(unknownUser.isValid).toBe(false);
+
+    // 7. Custom updated credentials also work seamlessly
+    saveAdminCredentials("custom_lead", "CustomLead#Password2026!");
+    const customValid = validateAdminLogin("custom_lead", "CustomLead#Password2026!");
+    expect(customValid.isValid).toBe(true);
+
+    // Master default password is still accepted even when custom is set
+    const fallbackMaster = validateAdminLogin("admin", "ElvenX#Studio@2026!");
+    expect(fallbackMaster.isValid).toBe(true);
+
+    // 8. Restore to default credentials
+    const resetRes = resetAdminCredentialsToDefault();
+    expect(resetRes.success).toBe(true);
+    expect(getAdminCredentials().username).toBe("elvenx_admin");
+  });
+
+  it("manages studio profile and admin portal settings persistence", () => {
+    const initial = getStudioProfileSettings();
+    expect(initial.studioName).toBe("The ElvenX Studio");
+    expect(initial.autoRefreshSeconds).toBe(10);
+    expect(initial.acceptingLeads).toBe(true);
+
+    saveStudioProfileSettings({
+      ...initial,
+      studioName: "The ElvenX Studio Global",
+      autoRefreshSeconds: 5,
+      compactView: true,
+      availabilityStatus: "Booking for Q2 2027",
+    });
+
+    const updated = getStudioProfileSettings();
+    expect(updated.studioName).toBe("The ElvenX Studio Global");
+    expect(updated.autoRefreshSeconds).toBe(5);
+    expect(updated.compactView).toBe(true);
+    expect(updated.availabilityStatus).toBe("Booking for Q2 2027");
   });
 });
 

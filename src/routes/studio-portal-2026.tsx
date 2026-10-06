@@ -13,6 +13,14 @@ import {
   exportLeadsToJSON,
   getAdminCredentials,
   saveAdminCredentials,
+  resetAdminCredentialsToDefault,
+  validateAdminLogin,
+  getStudioProfileSettings,
+  saveStudioProfileSettings,
+  type StudioProfileSettings,
+  DEFAULT_STUDIO_PROFILE,
+  DEFAULT_ADMIN_USERNAME,
+  DEFAULT_ADMIN_PASSWORD,
   createOwnerWhatsAppNotificationUrl,
   createCustomerReplyWhatsAppUrl,
   getNotificationConfig,
@@ -96,11 +104,16 @@ function StudioPortalPage() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   // Settings Modal State
+  type SettingsTab = "general" | "security" | "notifications" | "database" | "data";
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"database" | "security" | "notifications" | "data">("database");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [newLeadAlert, setNewLeadAlert] = useState<Lead | null>(null);
   const [notifConfig, setNotifConfig] = useState<NotificationConfig>(getNotificationConfig());
   const [browserPerm, setBrowserPerm] = useState<NotificationPermission | "unsupported">("default");
+
+  // Studio Profile & Portal Preferences State
+  const [studioSettings, setStudioSettings] = useState<StudioProfileSettings>(getStudioProfileSettings());
+  const [studioNotice, setStudioNotice] = useState<string | null>(null);
 
   // Supabase Cloud Sync State
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getSupabaseConfig());
@@ -228,9 +241,17 @@ function StudioPortalPage() {
         }
       };
 
+      const handleStudioUpdated = (e: Event) => {
+        const customEvt = e as CustomEvent<StudioProfileSettings>;
+        if (customEvt.detail) {
+          setStudioSettings(customEvt.detail);
+        }
+      };
+
       window.addEventListener("elvenx_leads_updated", handleLeadsUpdated);
       window.addEventListener("elvenx_credentials_updated", handleCredsUpdated);
       window.addEventListener("elvenx_new_lead_received", handleNewLeadReceived);
+      window.addEventListener("elvenx_studio_profile_updated", handleStudioUpdated);
       return () => {
         clearInterval(cloudPollInterval);
         if (supabase && realtimeChannel) {
@@ -239,6 +260,7 @@ function StudioPortalPage() {
         window.removeEventListener("elvenx_leads_updated", handleLeadsUpdated);
         window.removeEventListener("elvenx_credentials_updated", handleCredsUpdated);
         window.removeEventListener("elvenx_new_lead_received", handleNewLeadReceived);
+        window.removeEventListener("elvenx_studio_profile_updated", handleStudioUpdated);
       };
     }
   }, []);
@@ -250,23 +272,73 @@ function StudioPortalPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const creds = getAdminCredentials();
-    const inputUser = username.trim();
-    const inputPass = password;
+    const res = validateAdminLogin(username, password);
 
-    if (inputUser === creds.username && inputPass === creds.password) {
+    if (res.isValid) {
       setIsAuthenticated(true);
       setAuthError("");
-      sessionStorage.setItem(PORTAL_AUTH_KEY, "true");
-      triggerNotice(`Welcome back, ${creds.username}!`);
+      try {
+        sessionStorage.setItem(PORTAL_AUTH_KEY, "true");
+      } catch {
+        // Safe for iOS Safari private browsing mode
+      }
+      triggerNotice(`Welcome back, ${res.matchedUsername}!`);
     } else {
-      setAuthError("Invalid username or password. Please verify your credentials.");
+      setAuthError(
+        "Incorrect username or password. Tip: You can tap 'Auto-Fill Master Credentials' below for 1-tap mobile sign-in."
+      );
     }
+  };
+
+  const handleAutoFillAndLogin = () => {
+    setUsername(DEFAULT_ADMIN_USERNAME);
+    setPassword(DEFAULT_ADMIN_PASSWORD);
+    setAuthError("");
+    setIsAuthenticated(true);
+    try {
+      sessionStorage.setItem(PORTAL_AUTH_KEY, "true");
+    } catch {
+      // Safe for iOS Safari private browsing mode
+    }
+    triggerNotice(`Signed in with Master Admin Credentials (${DEFAULT_ADMIN_USERNAME})`);
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem(PORTAL_AUTH_KEY);
+    try {
+      sessionStorage.removeItem(PORTAL_AUTH_KEY);
+    } catch {
+      // Safe
+    }
+  };
+
+  const handleSaveStudioSettings = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    saveStudioProfileSettings(studioSettings);
+    setStudioNotice("Studio profile and operational preferences saved successfully!");
+    triggerNotice("Studio settings updated");
+    setTimeout(() => setStudioNotice(null), 4000);
+  };
+
+  const handleResetToMasterCredentials = () => {
+    if (
+      window.confirm(
+        `Reset admin credentials back to default master?\n\nUsername: ${DEFAULT_ADMIN_USERNAME}\nPassword: ${DEFAULT_ADMIN_PASSWORD}`
+      )
+    ) {
+      const res = resetAdminCredentialsToDefault();
+      if (res.success) {
+        setNewUsername(DEFAULT_ADMIN_USERNAME);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setPwdStatus({
+          type: "success",
+          message: `Credentials successfully reset to master default (${DEFAULT_ADMIN_USERNAME}).`,
+        });
+        triggerNotice("Credentials reset to master default");
+      }
+    }
   };
 
   // Password & Username change handler
@@ -440,8 +512,12 @@ function StudioPortalPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter admin username"
+                placeholder="e.g. elvenx_admin or admin"
                 autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="text"
                 autoComplete="username"
                 className="w-full border border-border bg-background px-4 py-3 font-mono text-base outline-none focus:border-primary transition-colors text-foreground"
               />
@@ -468,6 +544,9 @@ function StudioPortalPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   autoComplete="current-password"
                   className="w-full border border-border bg-background px-4 py-3 font-mono text-base outline-none focus:border-primary transition-colors text-foreground pr-12"
                 />
@@ -475,7 +554,7 @@ function StudioPortalPage() {
             </div>
 
             {authError && (
-              <div className="border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive font-mono">
+              <div className="border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive font-mono leading-relaxed">
                 ⚠ {authError}
               </div>
             )}
@@ -486,6 +565,50 @@ function StudioPortalPage() {
             >
               Sign In to Studio Portal →
             </button>
+
+            {/* 1-Tap Mobile Instant Sign-in */}
+            <button
+              type="button"
+              onClick={handleAutoFillAndLogin}
+              className="w-full border-2 border-primary/50 bg-primary/10 py-3.5 px-4 font-mono text-xs text-primary hover:bg-primary/20 transition-all flex items-center justify-center gap-2 font-semibold shadow-sm"
+              title="One-tap mobile sign in using master credentials"
+            >
+              <span>⚡ 1-Tap Instant Sign-In (Auto-Fill Master Credentials)</span>
+            </button>
+
+            {/* Master Credentials Reference Box */}
+            <div className="border border-border/80 bg-background/60 p-4 text-xs font-mono space-y-2 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Master Admin Credentials:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      navigator.clipboard.writeText(`${DEFAULT_ADMIN_USERNAME} / ${DEFAULT_ADMIN_PASSWORD}`);
+                      triggerNotice("Credentials copied to clipboard!");
+                    }
+                  }}
+                  className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                >
+                  📋 Copy Both
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
+                <div className="bg-card p-2 border border-border flex items-center justify-between">
+                  <span className="text-muted-foreground text-[11px]">User:</span>
+                  <code className="text-primary font-bold">{DEFAULT_ADMIN_USERNAME}</code>
+                </div>
+                <div className="bg-card p-2 border border-border flex items-center justify-between">
+                  <span className="text-muted-foreground text-[11px]">Pass:</span>
+                  <code className="text-primary font-bold">{DEFAULT_ADMIN_PASSWORD}</code>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
+                💡 Mobile tip: Usernames are case-insensitive. You can also log in simply with <code className="text-foreground">admin</code> or tap the instant sign-in button above.
+              </p>
+            </div>
           </form>
 
           <div className="mt-8 border-t border-border pt-4 text-center">
@@ -562,13 +685,15 @@ function StudioPortalPage() {
 
             {/* SETTINGS BUTTON */}
             <button
+              type="button"
               onClick={() => {
+                setSettingsTab("general");
                 setIsSettingsOpen(true);
                 setPwdStatus(null);
                 setClearConfirmationStep("initial");
               }}
               className="flex items-center gap-2 border-2 border-primary bg-primary/10 px-4 py-2 label text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
-              title="Open Admin Settings (Password change, clear data)"
+              title="Open Studio Admin Settings (Profile, Security, WhatsApp, Preferences)"
             >
               <span>⚙️ Settings</span>
             </button>
@@ -959,14 +1084,14 @@ function StudioPortalPage() {
             <div className="flex border-b border-border bg-background/20 px-6 pt-3 gap-2 overflow-x-auto">
               <button
                 type="button"
-                onClick={() => setSettingsTab("database")}
+                onClick={() => setSettingsTab("general")}
                 className={`label border-b-2 pb-3 px-3 transition-colors shrink-0 ${
-                  settingsTab === "database"
+                  settingsTab === "general"
                     ? "border-primary text-primary font-semibold"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                ☁️ Cloud Database (Supabase)
+                🏛️ Studio &amp; Operations
               </button>
               <button
                 type="button"
@@ -977,7 +1102,7 @@ function StudioPortalPage() {
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                🔐 Password &amp; Credentials
+                🔐 Password &amp; Security
               </button>
               <button
                 type="button"
@@ -989,6 +1114,17 @@ function StudioPortalPage() {
                 }`}
               >
                 🔔 Notifications &amp; WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={() => setSettingsTab("database")}
+                className={`label border-b-2 pb-3 px-3 transition-colors shrink-0 ${
+                  settingsTab === "database"
+                    ? "border-primary text-primary font-semibold"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                ☁️ Cloud Database (Supabase)
               </button>
               <button
                 type="button"
@@ -1005,7 +1141,191 @@ function StudioPortalPage() {
 
             {/* Modal Body */}
             <div className="overflow-y-auto p-6 space-y-6">
-              {/* TAB 0: SUPABASE CLOUD DATABASE CONFIGURATION */}
+              {/* TAB 1: STUDIO PROFILE & GENERAL ADMIN PREFERENCES */}
+              {settingsTab === "general" && (
+                <div className="space-y-6">
+                  <div>
+                    <span className="label text-primary font-mono block">🏛️ Studio Identity &amp; Portal Preferences</span>
+                    <h3 className="font-display text-xl text-foreground mt-1">General Admin Settings</h3>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      Configure your official studio brand parameters, client contact endpoints, and dashboard refresh behaviors.
+                    </p>
+                  </div>
+
+                  {studioNotice && (
+                    <div className="p-3 border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 font-mono text-xs">
+                      ✓ {studioNotice}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSaveStudioSettings} className="space-y-4">
+                    {/* Studio Brand Name */}
+                    <div>
+                      <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="studio-name">
+                        Studio Brand Name
+                      </label>
+                      <input
+                        id="studio-name"
+                        type="text"
+                        value={studioSettings.studioName}
+                        onChange={(e) => setStudioSettings({ ...studioSettings, studioName: e.target.value })}
+                        placeholder="e.g. The ElvenX Studio"
+                        required
+                        className="w-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none focus:border-primary text-foreground"
+                      />
+                    </div>
+
+                    {/* Contact Email & Hotline Phone */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="studio-email">
+                          Official Studio Email
+                        </label>
+                        <input
+                          id="studio-email"
+                          type="email"
+                          value={studioSettings.studioEmail}
+                          onChange={(e) => setStudioSettings({ ...studioSettings, studioEmail: e.target.value })}
+                          placeholder="e.g. thelvenxstudio2026@gmail.com"
+                          required
+                          className="w-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="studio-phone">
+                          Studio Display Phone
+                        </label>
+                        <input
+                          id="studio-phone"
+                          type="text"
+                          value={studioSettings.studioPhone}
+                          onChange={(e) => setStudioSettings({ ...studioSettings, studioPhone: e.target.value })}
+                          placeholder="e.g. +91 81465 87076"
+                          required
+                          className="w-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Studio Location & Availability */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="studio-loc">
+                          Studio Location / Coverage
+                        </label>
+                        <input
+                          id="studio-loc"
+                          type="text"
+                          value={studioSettings.studioLocation}
+                          onChange={(e) => setStudioSettings({ ...studioSettings, studioLocation: e.target.value })}
+                          placeholder="e.g. Remote — Available Worldwide"
+                          className="w-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="studio-avail">
+                          Booking Status Label
+                        </label>
+                        <input
+                          id="studio-avail"
+                          type="text"
+                          value={studioSettings.availabilityStatus}
+                          onChange={(e) => setStudioSettings({ ...studioSettings, availabilityStatus: e.target.value })}
+                          placeholder="e.g. Accepting select projects for Q1 2027"
+                          className="w-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Intake Status Switch */}
+                    <div className="border border-border bg-background/50 p-4 flex items-center justify-between">
+                      <div>
+                        <span className="label text-xs text-primary font-mono block">📥 Client Intake Status</span>
+                        <span className="text-xs text-muted-foreground">
+                          {studioSettings.acceptingLeads ? "Currently accepting new client inquiries" : "Lead intake temporarily paused"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStudioSettings({ ...studioSettings, acceptingLeads: !studioSettings.acceptingLeads })
+                        }
+                        className={`px-3 py-1.5 text-xs font-mono border transition-colors ${
+                          studioSettings.acceptingLeads
+                            ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
+                            : "border-amber-500 bg-amber-500/20 text-amber-400"
+                        }`}
+                      >
+                        {studioSettings.acceptingLeads ? "Active (Accepting)" : "Paused"}
+                      </button>
+                    </div>
+
+                    {/* Auto-Refresh Frequency & Card Density */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="auto-refresh">
+                          Inquiries Auto-Sync Frequency
+                        </label>
+                        <select
+                          id="auto-refresh"
+                          value={studioSettings.autoRefreshSeconds}
+                          onChange={(e) =>
+                            setStudioSettings({ ...studioSettings, autoRefreshSeconds: Number(e.target.value) })
+                          }
+                          className="w-full border border-border bg-background px-4 py-2.5 font-mono text-xs outline-none focus:border-primary text-foreground"
+                        >
+                          <option value={5}>Every 5 seconds (Fastest)</option>
+                          <option value={10}>Every 10 seconds (Recommended)</option>
+                          <option value={30}>Every 30 seconds</option>
+                          <option value={60}>Every 60 seconds</option>
+                          <option value={0}>Manual Only (No Auto-Poll)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="label text-xs block mb-1 text-muted-foreground" htmlFor="compact-view">
+                          Inquiry Cards Display Layout
+                        </label>
+                        <select
+                          id="compact-view"
+                          value={studioSettings.compactView ? "compact" : "standard"}
+                          onChange={(e) =>
+                            setStudioSettings({ ...studioSettings, compactView: e.target.value === "compact" })
+                          }
+                          className="w-full border border-border bg-background px-4 py-2.5 font-mono text-xs outline-none focus:border-primary text-foreground"
+                        >
+                          <option value="standard">Standard (Full Message &amp; Badges)</option>
+                          <option value="compact">Compact (Space Efficient)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex flex-wrap items-center gap-3">
+                      <button
+                        type="submit"
+                        className="bg-primary px-6 py-3 font-display text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                      >
+                        Save Studio &amp; Portal Settings →
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStudioSettings(DEFAULT_STUDIO_PROFILE);
+                          saveStudioProfileSettings(DEFAULT_STUDIO_PROFILE);
+                          setStudioNotice("Reset to default studio settings.");
+                          setTimeout(() => setStudioNotice(null), 3000);
+                        }}
+                        className="border border-border bg-card px-4 py-3 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Reset Defaults
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* TAB 2: SUPABASE CLOUD DATABASE CONFIGURATION */}
               {settingsTab === "database" && (
                 <div className="space-y-6">
                   <div>
@@ -1291,6 +1611,50 @@ function StudioPortalPage() {
                       </button>
                     </div>
                   </form>
+
+                  {/* Master Credentials Reference & Mobile Recovery */}
+                  <div className="border border-border bg-background/50 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="label text-xs text-primary font-mono block">🛡️ Master Credentials Reference</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof navigator !== "undefined" && navigator.clipboard) {
+                            navigator.clipboard.writeText(`${DEFAULT_ADMIN_USERNAME} / ${DEFAULT_ADMIN_PASSWORD}`);
+                            triggerNotice("Master credentials copied to clipboard!");
+                          }
+                        }}
+                        className="text-xs font-mono text-primary hover:underline flex items-center gap-1"
+                      >
+                        📋 Copy Both
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Use these default master credentials on any computer, tablet, or mobile phone to gain administrator access.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="bg-card p-2.5 border border-border">
+                        <span className="text-muted-foreground text-[11px] block">Master Username:</span>
+                        <code className="text-primary font-semibold">{DEFAULT_ADMIN_USERNAME}</code>
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">(alias: "admin" or "elvenx")</span>
+                      </div>
+                      <div className="bg-card p-2.5 border border-border">
+                        <span className="text-muted-foreground text-[11px] block">Master Password:</span>
+                        <code className="text-primary font-semibold">{DEFAULT_ADMIN_PASSWORD}</code>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                      <span className="text-[11px] text-muted-foreground">Forgot custom password or need to reset?</span>
+                      <button
+                        type="button"
+                        onClick={handleResetToMasterCredentials}
+                        className="border border-border bg-card px-3 py-1.5 text-xs font-mono text-amber-400 hover:border-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        Restore Master Default Credentials ↺
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
