@@ -284,23 +284,8 @@ function StudioPortalPage() {
       }
       triggerNotice(`Welcome back, ${res.matchedUsername}!`);
     } else {
-      setAuthError(
-        "Incorrect username or password. Tip: You can tap 'Auto-Fill Master Credentials' below for 1-tap mobile sign-in."
-      );
+      setAuthError("Incorrect username or password. Please try again.");
     }
-  };
-
-  const handleAutoFillAndLogin = () => {
-    setUsername(DEFAULT_ADMIN_USERNAME);
-    setPassword(DEFAULT_ADMIN_PASSWORD);
-    setAuthError("");
-    setIsAuthenticated(true);
-    try {
-      sessionStorage.setItem(PORTAL_AUTH_KEY, "true");
-    } catch {
-      // Safe for iOS Safari private browsing mode
-    }
-    triggerNotice(`Signed in with Master Admin Credentials (${DEFAULT_ADMIN_USERNAME})`);
   };
 
   const handleLogout = () => {
@@ -512,7 +497,7 @@ function StudioPortalPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. elvenx_admin or admin"
+                placeholder="Enter admin username"
                 autoFocus
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -565,50 +550,6 @@ function StudioPortalPage() {
             >
               Sign In to Studio Portal →
             </button>
-
-            {/* 1-Tap Mobile Instant Sign-in */}
-            <button
-              type="button"
-              onClick={handleAutoFillAndLogin}
-              className="w-full border-2 border-primary/50 bg-primary/10 py-3.5 px-4 font-mono text-xs text-primary hover:bg-primary/20 transition-all flex items-center justify-center gap-2 font-semibold shadow-sm"
-              title="One-tap mobile sign in using master credentials"
-            >
-              <span>⚡ 1-Tap Instant Sign-In (Auto-Fill Master Credentials)</span>
-            </button>
-
-            {/* Master Credentials Reference Box */}
-            <div className="border border-border/80 bg-background/60 p-4 text-xs font-mono space-y-2 mt-2">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
-                  Master Admin Credentials:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof navigator !== "undefined" && navigator.clipboard) {
-                      navigator.clipboard.writeText(`${DEFAULT_ADMIN_USERNAME} / ${DEFAULT_ADMIN_PASSWORD}`);
-                      triggerNotice("Credentials copied to clipboard!");
-                    }
-                  }}
-                  className="text-[11px] text-primary hover:underline flex items-center gap-1"
-                >
-                  📋 Copy Both
-                </button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
-                <div className="bg-card p-2 border border-border flex items-center justify-between">
-                  <span className="text-muted-foreground text-[11px]">User:</span>
-                  <code className="text-primary font-bold">{DEFAULT_ADMIN_USERNAME}</code>
-                </div>
-                <div className="bg-card p-2 border border-border flex items-center justify-between">
-                  <span className="text-muted-foreground text-[11px]">Pass:</span>
-                  <code className="text-primary font-bold">{DEFAULT_ADMIN_PASSWORD}</code>
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
-                💡 Mobile tip: Usernames are case-insensitive. You can also log in simply with <code className="text-foreground">admin</code> or tap the instant sign-in button above.
-              </p>
-            </div>
           </form>
 
           <div className="mt-8 border-t border-border pt-4 text-center">
