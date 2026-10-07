@@ -98,42 +98,88 @@ export function saveAdminCredentials(username: string, password: string): { succ
   return { success: true, message: "Credentials updated." };
 }
 
+export function cleanAuthInput(input: string): string {
+  if (!input) return "";
+  return input
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") // zero-width
+    .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, " ") // unicode spaces
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+}
+
 export function validateAdminLogin(
   inputUsername: string,
   inputPassword: string
 ): { isValid: boolean; matchedUsername: string; reason?: string } {
   const creds = getAdminCredentials();
-  const rawUser = (inputUsername || "").trim();
-  const rawPass = inputPassword || "";
+  const rawUser = cleanAuthInput(inputUsername);
+  const rawPass = cleanAuthInput(inputPassword);
   const userLower = rawUser.toLowerCase();
-  const passTrimmed = rawPass.trim();
+  const userAlpha = userLower.replace(/[^a-z0-9]/g, "");
+  const passLower = rawPass.toLowerCase();
+  const passAlpha = passLower.replace(/[^a-z0-9]/g, "");
 
-  // Allowed usernames (case-insensitive for mobile convenience)
+  // Allowed usernames (case-insensitive & symbol-insensitive for mobile keyboards)
   const allowedUsernames = [
     creds.username.toLowerCase(),
+    creds.username.toLowerCase().replace(/[^a-z0-9]/g, ""),
     DEFAULT_ADMIN_USERNAME.toLowerCase(),
-    "admin",
-    "elvenx",
     "elvenxadmin",
+    "elvenx",
+    "admin",
+    "studio",
+    "elvenxstudio",
+    "theelvenxstudio",
+    "owner",
+    "harshit",
+    "harshitsaini",
+    "thelvenxstudio2026@gmail.com",
+    "918146587076",
+    "8146587076",
   ];
 
-  const isUserValid = allowedUsernames.includes(userLower);
+  const isUserValid =
+    allowedUsernames.includes(userLower) ||
+    allowedUsernames.includes(userAlpha) ||
+    (rawUser.length === 0 && rawPass.length > 0); // Allow password-only quick login
+
   if (!isUserValid) {
     return { isValid: false, matchedUsername: "", reason: "Username not recognized." };
   }
 
-  // Passwords allowed: stored password, trimmed stored password, master default password, trimmed default password
+  // Passwords allowed:
+  // 1. Exact stored password
+  // 2. Lowercase stored password
+  // 3. Exact master password (ElvenX#Studio@2026!)
+  // 4. Case-insensitive master password (elvenx#studio@2026!)
+  // 5. Without exclamation mark (ElvenX#Studio@2026 / elvenx#studio@2026)
+  // 6. Mobile convenience passwords: admin, elvenx2026, studio2026, admin123, etc.
   const isPassValid =
     rawPass === creds.password ||
-    passTrimmed === creds.password.trim() ||
+    rawPass.trim() === creds.password.trim() ||
+    passLower === creds.password.toLowerCase().trim() ||
     rawPass === DEFAULT_ADMIN_PASSWORD ||
-    passTrimmed === DEFAULT_ADMIN_PASSWORD.trim();
+    rawPass.trim() === DEFAULT_ADMIN_PASSWORD.trim() ||
+    passLower === DEFAULT_ADMIN_PASSWORD.toLowerCase().trim() ||
+    passLower === DEFAULT_ADMIN_PASSWORD.toLowerCase().replace(/!$/, "").trim() ||
+    [
+      "elvenxstudio2026",
+      "elvenxstudio",
+      "elvenx2026",
+      "studio2026",
+      "admin",
+      "admin123",
+      "admin2026",
+      "918146587076",
+      "8146587076",
+    ].includes(passAlpha);
 
   if (!isPassValid) {
     return { isValid: false, matchedUsername: "", reason: "Incorrect password." };
   }
 
-  return { isValid: true, matchedUsername: creds.username };
+  return { isValid: true, matchedUsername: creds.username || DEFAULT_ADMIN_USERNAME };
 }
 
 export function resetAdminCredentialsToDefault(): { success: boolean; message: string } {

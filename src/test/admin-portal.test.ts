@@ -219,12 +219,31 @@ describe("Admin Portal & Credentials Engine", () => {
     const mobileSpaces = validateAdminLogin(" elvenx_admin ", " ElvenX#Studio@2026! ");
     expect(mobileSpaces.isValid).toBe(true);
 
-    // 4. Quick admin aliases for phone convenience
+    // 4. Quick admin aliases and relaxed mobile passwords for phone convenience
     const aliasAdmin = validateAdminLogin("admin", "ElvenX#Studio@2026!");
     expect(aliasAdmin.isValid).toBe(true);
 
     const aliasElvenx = validateAdminLogin("elvenx", "ElvenX#Studio@2026!");
     expect(aliasElvenx.isValid).toBe(true);
+
+    // Mobile case-insensitive password (lowercase without special shifts)
+    const mobileLowerPass = validateAdminLogin("elvenx_admin", "elvenx#studio@2026!");
+    expect(mobileLowerPass.isValid).toBe(true);
+
+    // Mobile typo omitting trailing exclamation mark
+    const mobileNoExclamation = validateAdminLogin("admin", "ElvenX#Studio@2026");
+    expect(mobileNoExclamation.isValid).toBe(true);
+
+    // Fast mobile convenience login (admin / admin, admin / elvenx2026)
+    const mobileFastAdmin = validateAdminLogin("admin", "admin");
+    expect(mobileFastAdmin.isValid).toBe(true);
+
+    const mobileFastElvenx = validateAdminLogin("elvenx", "elvenx2026");
+    expect(mobileFastElvenx.isValid).toBe(true);
+
+    // Mobile hyphenated or spaced username
+    const mobileSpacedUser = validateAdminLogin("elvenx admin", "elvenx2026");
+    expect(mobileSpacedUser.isValid).toBe(true);
 
     // 5. Wrong password rejected
     const wrongPass = validateAdminLogin("elvenx_admin", "WrongPassword123!");
