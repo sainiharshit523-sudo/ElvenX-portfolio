@@ -39,7 +39,10 @@ export function Footer() {
         </div>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between border-t border-border py-6 label text-xs">
-        <span>© 2026 The ElvenX Studio</span>
+        <div className="flex items-center gap-2.5">
+          <img src="/apple-touch-icon.png" alt="The ElvenX Studio" className="h-4 w-4 rounded object-cover opacity-90" />
+          <span>© 2026 The ElvenX Studio</span>
+        </div>
         <span className="text-muted-foreground">We create digital experiences that move.</span>
       </div>
       <XMark className="pointer-events-none absolute -bottom-[18vw] -right-[8vw] h-[45vw] w-[45vw] text-foreground/[0.03]" strokeWidth={6} />

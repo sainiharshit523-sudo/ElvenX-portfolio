@@ -10,6 +10,11 @@ export function XMark({ className = "", strokeWidth = 10 }: { className?: string
 export function Logo() {
   return (
     <span className="inline-flex items-center gap-2.5 sm:gap-3 font-display text-lg sm:text-xl md:text-2xl font-bold tracking-[0.14em] select-none transition-all duration-300 drop-shadow-[0_4px_14px_rgba(0,0,0,0.9)] hover:drop-shadow-[0_4px_20px_rgba(200,255,77,0.5)]">
+      <img
+        src="/apple-touch-icon.png"
+        alt="The ElvenX Studio"
+        className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg object-contain border border-white/10 shadow-md"
+      />
       <span className="text-primary [text-shadow:_0_0_16px_rgba(200,255,77,0.65),_0_2px_10px_rgba(0,0,0,0.95)]">
         The
       </span>

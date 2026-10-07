@@ -228,7 +228,7 @@ function StudioPortalPage() {
           try {
             const notif = new Notification(`⚡ New Lead: ${incoming.name}`, {
               body: `${incoming.services.join(", ") || "Inquiry"} • ${incoming.budget}\n"${incoming.message.slice(0, 90)}..."`,
-              icon: "/favicon.ico",
+              icon: "/apple-touch-icon.png",
               tag: `lead-${incoming.id}`,
             });
             notif.onclick = () => {
@@ -472,13 +472,20 @@ function StudioPortalPage() {
       <div className="flex min-h-[92vh] items-center justify-center px-5 py-20">
         <div className="w-full max-w-lg border border-border bg-card p-8 md:p-10 shadow-2xl">
           <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <span className="label text-primary font-mono">(Private Studio Portal)</span>
-              <span className="text-[11px] font-mono text-muted-foreground border border-border px-2 py-0.5">
-                SECURE ROUTE
-              </span>
+            <div className="flex items-center gap-3.5 mb-4">
+              <img
+                src="/apple-touch-icon.png"
+                alt="The ElvenX Studio"
+                className="h-12 w-12 rounded-xl border border-border/80 object-cover shadow-lg"
+              />
+              <div>
+                <span className="label text-primary font-mono block text-xs">(Private Studio Portal)</span>
+                <span className="text-[10px] font-mono text-muted-foreground border border-border px-1.5 py-0.5">
+                  SECURE ROUTE
+                </span>
+              </div>
             </div>
-            <h1 className="display mt-3 text-3xl md:text-4xl text-foreground">
+            <h1 className="display text-3xl md:text-4xl text-foreground">
               Admin <span className="text-primary">Vault</span>
             </h1>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
@@ -572,7 +579,12 @@ function StudioPortalPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <img
+                src="/apple-touch-icon.png"
+                alt="The ElvenX Studio"
+                className="h-7 w-7 rounded-lg border border-border/70 object-cover"
+              />
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="label text-primary">(Private Portal · /studio-portal-2026)</span>
             </div>
             <h1 className="display mt-2 text-4xl md:text-6xl text-foreground">
@@ -1669,7 +1681,7 @@ function StudioPortalPage() {
                                 triggerNotice("Desktop notifications granted!");
                                 new Notification("The ElvenX Studio", {
                                   body: "Desktop notifications are now active for new client leads!",
-                                  icon: "/favicon.ico",
+                                  icon: "/apple-touch-icon.png",
                                 });
                               }
                             }
